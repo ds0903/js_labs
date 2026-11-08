@@ -5,6 +5,7 @@
 
 - лаба 1: ігровий цикл, введення, корабель, три експерименти
 - лаба 2: сутності, World, зіткнення, кулі, композиція (розділ "Лаба 2")
+- лаба 3: завантаження ресурсів, спрайти й звук, лобі по HTTP (розділ "Лаба 3")
 
 ![лаба 1](docs/screenshot.png)
 
@@ -42,7 +43,14 @@ src/sim/rules.js       що відбувається при зіткненні: 
 src/sim/game.js        збирає світ: кораблі, астероїди, піккапи
 src/sim/arena.js       розмір арени, загортання координат
 src/sim/random.js      детермінований генератор
-test/                  node --test: Vector2, World, баг this, правила, детермінізм
+src/assets/loader.js   fetchJson, loadImage, loadAudio, withRetry, loadAll
+src/audio.js           AudioContext, відтворення, підписка на події світу
+src/ui/loading.js      екран завантаження на canvas із прогрес-баром
+src/ui/lobby-view.js   DOM лобі, src/ui/hud.js рахунок і повідомлення
+src/net/lobby.js       Lobby extends EventTarget: refresh, join, leave
+public/assets/         manifest.json, sprites.png, три .wav (scripts/gen-assets.mjs)
+vite.config.js         dev-міддлвар: /api/rooms і /slow/<мс>/... для затримок
+test/                  node --test: Vector2, World, this, правила, завантажувач, лобі
 src/render/canvas.js   canvas з devicePixelRatio, масштаб під вікно
 src/render/draw.js     малювання арени, зірок, корабля
 src/render/interpolate.js  lerp, кут, координата через край арени
@@ -277,3 +285,187 @@ window.addEventListener("keydown", ship.fire); // не працює
 
 Stretch (ECS на типізованих масивах, просторовий хеш, заміри `World.step` на 5000 сутностях)
 не робив. Числових вимірів у лабі 2 немає.
+
+## Лаба 3: асинхронний JavaScript
+
+![лобі](docs/lab3-lobby.png)
+
+Тепер гра стартує так: екран завантаження (реальний прогрес) -> лобі (ім'я і кімната) -> гра зі
+спрайтами й звуком. Ресурси (спрайт-лист і звуки) згенерував скрипт `scripts/gen-assets.mjs`,
+щоб не залежати від чужих файлів. `?exp=...` і `?scenario` з лаби 1 стартують гру одразу, без
+завантаження і лобі.
+
+### Завантаження ресурсів
+
+- `public/assets/manifest.json`: спрайт-лист із прямокутниками кадрів, три звуки, опис арен.
+- `loader.js`: `fetchJson` перевіряє `response.ok` в одному місці (`fetch` не відхиляє промис на
+  404/500), `loadJson`, `loadImage` (`fetch` -> `createImageBitmap`), `loadAudio(ctx, url)`
+  (`decodeAudioData`). Усі приймають `AbortSignal`, у кожного запиту є таймаут через
+  `AbortSignal.timeout` (8 с за замовчуванням).
+- `withRetry(fn, { attempts, baseMs, signal })`: повторює лише тимчасові помилки (5xx, мережа,
+  таймаут), ніколи 4xx, зламаний JSON чи файл, який не декодується. Пауза `baseMs * 2^(n-1)`,
+  помножена на випадкове 0,5-1 (jitter). Взяв 3 спроби і `baseMs` 250 мс.
+- `loadAll(manifest, { onProgress, signal })`: `Promise.all` по всіх ресурсах, прогрес
+  `готово / усього` після кожного. Ресурс з `optional: true` може впасти (він потрапляє у
+  `result.failed`), решта вантажиться. Якщо падає обов'язковий, решта запитів скасовується
+  внутрішнім `AbortController`, щоб не лишати осиротілих запитів.
+- Гра стартує тільки після `await loadAll(...)`. Звуки декодуються під час завантаження, а не
+  при першому пострілі.
+
+### Порівняння: послідовно проти одночасно
+
+`?slow=200&inject=many`: кожен запит іде через dev-міддлвар із затримкою 200 мс, плюс 12 копій
+звуку, разом 16 ресурсів і `manifest.json` перед ними. Час від початку до готовності, 3 прогони,
+мілісекунди:
+
+| режим                           | прогони          | середнє |
+| ------------------------------- | ---------------- | ------- |
+| `Promise.all` (одночасно)       | 877, 844, 844    | 855     |
+| по черзі (`?loader=sequential`) | 3686, 3661, 3692 | 3680    |
+
+Послідовно виходить 17 запитів по 200 мс = 3400 мс плюс декодування. Одночасно виходить не
+200, а ~855 мс: Vite dev працює по HTTP/1.1, а браузер тримає до 6 з'єднань на хост, тож 16
+ресурсів ідуть трьома хвилями по ~200 мс після `manifest.json`. Те саме перевіряє тест
+`loadAll: progress is real...` на підробленому `fetch`.
+
+### Звук і спрайти
+
+Спрайти малюються через `drawImage` з прямокутниками з маніфесту (кораблі, астероїди звичайні
+й червоні, три піккапи, дві кулі). Якщо спрайт-листа нема, `drawScene` малює векторні фігури з
+лаби 2. `audio.js` володіє `AudioContext`, перший клік або клавіша робить `resume()` (браузер
+тримає контекст призупиненим до жесту).
+
+Симуляція не імпортує ні `audio.js`, ні `hud.js`: `World` це `EventTarget`, він шле
+`CustomEvent` `fired`, `hit`, `exploded`, `pickup`, `score`, `respawned`, а звук і HUD
+підписуються ззовні (`connectAudio`, `connectHud`). Є тест, який читає імпорти у `src/sim/*.js` і
+падає, якщо там з'явиться audio, hud, ui чи loader.
+
+### Лобі по HTTP
+
+`Lobby extends EventTarget` (`refresh()`, `join(roomId, name)`, `leave()`, події `rooms`,
+`error`, `joined`) нічого не знає про DOM, а `lobby-view.js` лише слухає події й малює.
+Кімнати приходять з `/api/rooms` (поки що dev-міддлвар віддає `public/api/rooms.json`, у лабі 4
+це замінить сервер). Оновлення раз на 3 с, поки лобі видно, кожен запит із таймаутом 2,5 с через
+`AbortSignal.timeout`, запити не накладаються. `leave()` зупиняє таймер і скасовує запит, який
+ще летить: тест перевіряє, що після `leave()` сигнал запиту `aborted` і подій нема. Join
+запускає локальну гру з налаштуваннями арени кімнати (кількість астероїдів, піккапи).
+
+Помилку лобі я побачив на собі: спершу `/api/rooms` віддавав HTML, бо Vite на шлях без
+розширення повертає `index.html`. Лобі показало "Cannot load rooms: Unexpected token '<'..." і
+продовжило пробувати, не впало.
+
+### П'ять головоломок
+
+Кожну запустив, виводи справжні.
+
+**1.** `await` і мікрозадачі:
+
+```js
+async function f() {
+  log("a");
+  await null;
+  log("b");
+}
+log("1");
+f();
+Promise.resolve().then(() => log("c"));
+log("2");
+```
+Вивід: `1, a, 2, b, c`. `f()` біжить синхронно до першого `await` (тому `a` раніше за `2`), а
+продовження після `await` стає мікрозадачею раніше, ніж `.then(c)`.
+
+**2.** `setTimeout` усередині `.then`:
+
+```js
+setTimeout(() => log("timeout 1"), 0);
+Promise.resolve()
+  .then(() => {
+    log("then 1");
+    setTimeout(() => log("timeout 2"), 0);
+  })
+  .then(() => log("then 2"));
+log("sync");
+```
+Вивід: `sync, then 1, then 2, timeout 1, timeout 2`. Усі мікрозадачі виконуються до наступної
+таски, тож обидва `then` раніше за будь-який таймер. Таймери йдуть у порядку створення.
+
+**3.** `requestAnimationFrame` (у Chromium, 20 прогонів з 20 однаково):
+
+```js
+requestAnimationFrame(() => log("raf"));
+setTimeout(() => log("timeout"), 0);
+Promise.resolve().then(() => log("microtask"));
+log("sync");
+```
+Вивід: `sync, microtask, timeout, raf`. Мікрозадача після синхронного коду, таймер це окрема таска,
+а rAF-колбек іде в кроці рендерингу перед малюванням, тобто пізніше. Це не гарантія: якщо
+кадр випаде раніше за таймер, порядок буде іншим. Я лише виміряв, що в цьому браузері так.
+
+**4.** Уже виконаний промис, `await` і `queueMicrotask`:
+
+```js
+const p = new Promise((resolve) => {
+  log("executor");
+  resolve("v");
+});
+p.then(() => log("then"));
+(async () => {
+  log("async start");
+  await p;
+  log("async resumed");
+})();
+queueMicrotask(() => log("queueMicrotask"));
+log("end");
+```
+Вивід: `executor, async start, end, then, async resumed, queueMicrotask`. Executor біжить
+синхронно. Далі черга мікрозадач просто йде в порядку додавання: `.then`, продовження після
+`await p`, `queueMicrotask`.
+
+**5.** `finally` і зайві такти:
+
+```js
+Promise.reject(new Error("x"))
+  .catch(() => log("caught"))
+  .finally(() => log("finally"))
+  .then(() => log("after"));
+Promise.resolve()
+  .then(() => log("p1"))
+  .then(() => log("p2"))
+  .then(() => log("p3"))
+  .then(() => log("p4"));
+log("sync");
+```
+Вивід: `sync, caught, p1, finally, p2, p3, p4, after`. Обидва ланцюжки ідуть по одному такту
+по черзі, але `finally` повертає новий промис, і `.then(after)` чекає ще кілька тактів,
+тому `after` приходить після `p4`, хоча стоїть у коді раніше за ланцюжок p1-p4.
+
+### Галерея збоїв
+
+Кожен випадок відтворюється через адресу. Логи з `window.__loadLog`.
+
+| випадок                     | адреса                         | що в логу                                                                                                                             | що бачить гравець                                                               |
+| --------------------------- | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| 404 спрайт (необов'язковий) | `?inject=missing`              | `loaded in 20 ms, optional failures: sprite:ghost (HTTP 404 for /assets/ghost.png)`                                                   | гра стартує, лобі є, спрайта нема. 404 не повторюється                          |
+| таймаут                     | `?inject=timeout&timeout=1500` | `retry sound:stuck: attempt 1 failed (TimeoutError), next in 159 ms`, `... attempt 2 ... next in 489 ms`, `Failed: request timed out` | через 5,5 с екран з червоною смугою на 80%, "Failed: request timed out" і Retry |
+| abort посеред завантаження  | `?slow=1500`, Esc              | `Loading cancelled`                                                                                                                   | екран "Loading cancelled" і Retry                                               |
+| зламаний JSON               | `?inject=corrupt`              | `Failed: broken JSON (Unexpected end of JSON input)`, без повторів                                                                    | екран із помилкою і Retry                                                       |
+
+![таймаут](docs/lab3-fail.png)
+
+Зламаний JSON не повторюється, бо `SyntaxError` не тимчасова помилка: той самий файл буде зламаним
+і вдруге. Для таймауту з'являється 2 повтори (з 3 спроб) з паузами в межах jitter. Retry
+перевірив на abort: `?slow=400`, Esc, Retry, і завантаження успішно доходить до лобі (в логу
+`Loading cancelled`, потім `loaded in 822 ms`). У випадках, де ресурс зламаний навмисно, Retry
+знову впаде, там я перевіряв лише появу кнопки.
+
+Перший прогін "404" показав, що це не 404: Vite dev віддає `index.html` зі статусом 200 на
+невідомий шлях, `ok === true`, і помилка була "The source image could not be decoded".
+Виправив тим, що `loadImage` і `loadAudio` шлють `Accept: image/*` і `audio/*`, тоді Vite
+чесно відповідає 404.
+
+### Що не зроблено (лаба 3)
+
+Stretch (потоковий прогрес за `Content-Length`, пріоритетний завантажувач, власний `Promise.all`)
+не робив. П'ять консольних дослідів з тексту лаби (`fetch` на 404, `AbortController`,
+необроблений reject тощо) окремо не робив і в README не виписував: у звіт пішли таймінг,
+головоломки й галерея збоїв, а `fetch` на 404 і abort покриті тестами в `test/loader.test.js`.
