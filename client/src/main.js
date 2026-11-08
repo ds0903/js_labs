@@ -3,11 +3,13 @@ import { connectAudio, createAudio } from "./audio.js";
 import { burn, createExperimentLoop, createScenario } from "./experiments.js";
 import { createInput } from "./input.js";
 import { createLoop, STEP } from "./loop.js";
+import { Connection, wsUrl } from "./net/connection.js";
 import { Lobby } from "./net/lobby.js";
 import { createView } from "./render/canvas.js";
 import { drawScene } from "./render/draw.js";
 import { createGame } from "./sim/game.js";
 import { createStats } from "./stats.js";
+import { createChatView } from "./ui/chat-view.js";
 import { connectHud } from "./ui/hud.js";
 import { createLoadingScreen } from "./ui/loading.js";
 import { showLobby } from "./ui/lobby-view.js";
@@ -170,6 +172,12 @@ async function boot() {
 
   const lobby = new Lobby();
   const { name, room } = await showLobby(overlay, lobby);
+
+  // the match itself is still local; the room gives chat and a player list
+  const connection = new Connection({ url: wsUrl(), room: room.id, name });
+  createChatView(document.body, connection, { roomName: room.name, selfName: name });
+  window.__connection = connection;
+
   startGame({
     config: manifest.arenas[room.arena],
     sprites: assets.sprites,

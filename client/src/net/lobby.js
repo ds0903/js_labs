@@ -1,4 +1,4 @@
-import { fetchJson } from "../assets/loader.js";
+import { fetchJson, postJson } from "../assets/loader.js";
 
 // Room list over HTTP. It extends EventTarget and knows nothing about the
 // DOM: the view listens to "rooms", "error" and "joined".
@@ -35,6 +35,15 @@ export class Lobby extends EventTarget {
     } finally {
       this.#busy = false;
     }
+  }
+
+  // creates a room on the server; the refused case (429, 400) throws with the
+  // server's explanation as the message
+  async create(name, arena) {
+    const room = await postJson(this.url, { name, arena }, { timeoutMs: this.timeoutMs });
+    this.rooms = [...this.rooms, room];
+    this.dispatchEvent(new CustomEvent("rooms", { detail: this.rooms }));
+    return room;
   }
 
   join(roomId, name) {

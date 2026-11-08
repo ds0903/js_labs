@@ -39,6 +39,24 @@ export async function fetchJson(url, options) {
 
 export const loadJson = fetchJson;
 
+// POST with a JSON body. The server explains a refusal as { error }, so the
+// error message is taken from there when it can be read.
+export async function postJson(url, body, { signal, timeoutMs = 8000 } = {}) {
+  const response = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+    signal: withTimeout(signal, timeoutMs),
+  });
+  if (!response.ok) {
+    const error = new HttpError(response.status, url);
+    const detail = await response.json().catch(() => null);
+    if (detail?.error) error.message = detail.error;
+    throw error;
+  }
+  return response.json();
+}
+
 export async function loadImage(url, options) {
   const response = await fetchChecked(url, { ...options, accept: "image/*" });
   return createImageBitmap(await response.blob());

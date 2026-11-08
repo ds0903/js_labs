@@ -5,7 +5,11 @@ export function createInput(target = window) {
   const pressed = new Set();
   const handlers = new Map(); // code -> Set of functions
 
+  // keys typed into the chat line or the lobby form are not game input
+  const typing = (event) => event.target?.matches?.("input, textarea, select");
+
   function onKeyDown(event) {
+    if (typing(event)) return;
     if (!down.has(event.code)) pressed.add(event.code);
     down.add(event.code);
     if (!event.repeat) {

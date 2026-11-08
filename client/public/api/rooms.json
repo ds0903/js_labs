@@ -1,5 +1,0 @@
-[
-  { "id": "classic", "name": "Classic", "arena": "classic", "players": 0 },
-  { "id": "rocks", "name": "Rock field", "arena": "rocks", "players": 0 },
-  { "id": "duel", "name": "Open duel", "arena": "duel", "players": 0 }
-]
