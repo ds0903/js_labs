@@ -27,11 +27,15 @@ export async function startApp(env = {}) {
   return { app, port, dir, config, base: `http://127.0.0.1:${port}` };
 }
 
-export function connect(port, options) {
+export function connect(port, options, query = "") {
   return new Promise((resolve, reject) => {
-    const ws = new WebSocket(`ws://127.0.0.1:${port}/ws`, options);
-    ws.messages = [];
-    ws.on("message", (data) => ws.messages.push(JSON.parse(data.toString())));
+    const ws = new WebSocket(`ws://127.0.0.1:${port}/ws${query}`, options);
+    ws.messages = []; // JSON control messages
+    ws.frames = []; // binary game frames (snapshots)
+    ws.on("message", (data, isBinary) => {
+      if (isBinary) ws.frames.push(data);
+      else ws.messages.push(JSON.parse(data.toString()));
+    });
     ws.once("open", () => resolve(ws));
     ws.once("error", reject);
   });

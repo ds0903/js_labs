@@ -83,6 +83,15 @@ export function createHandler({ config, rooms, stats, connections }) {
       });
     }
 
+    if (pathname === "/api/stats" && method === "GET") {
+      return sendJson(res, 200, {
+        uptimeSec: Math.round(process.uptime()),
+        rss: process.memoryUsage().rss,
+        connections: connections(),
+        rooms: rooms.stats(),
+      });
+    }
+
     if (pathname === "/api/rooms") {
       if (method === "GET") return sendJson(res, 200, rooms.list());
       if (method === "POST") {

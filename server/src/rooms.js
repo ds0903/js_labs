@@ -1,6 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { EventEmitter } from "node:events";
 import { startMatchLog } from "./log/matchlog.js";
+import { Match } from "./match.js";
 import { chat, roster } from "./protocol.js";
 
 export class LimitError extends Error {
@@ -28,8 +29,13 @@ export class Room extends EventEmitter {
     this.emit("event", { t: Date.now(), ...event });
   }
 
+  // ship, sprite and color are there once a Match has created the ship
   listPlayers() {
-    return [...this.players.values()].map(({ id, name }) => ({ id, name }));
+    return [...this.players.values()].map(({ id, name, shipId, sprite, color }) => ({
+      id,
+      name,
+      ...(shipId !== undefined && { ship: shipId, sprite, color }),
+    }));
   }
 
   broadcast(message, options) {
@@ -84,12 +90,14 @@ export class RoomManager {
     maxPlayers = 8,
     logDir = null,
     staleRoomMs = 60_000,
+    maxInputQueue = 3,
     onError,
   } = {}) {
     this.maxRooms = maxRooms;
     this.maxPlayers = maxPlayers;
     this.logDir = logDir;
     this.staleRoomMs = staleRoomMs;
+    this.maxInputQueue = maxInputQueue;
     this.onError = onError ?? (() => {});
   }
 
@@ -103,6 +111,7 @@ export class RoomManager {
         .replace(/^-|-$/g, "") || "room";
     const id = `${slug.slice(0, 20)}-${randomBytes(3).toString("hex")}`;
     const room = new Room({ id, name, arena, maxPlayers: this.maxPlayers });
+    room.match = new Match(room, { maxInputQueue: this.maxInputQueue });
     this.rooms.set(id, room);
 
     if (this.logDir) {
@@ -133,6 +142,10 @@ export class RoomManager {
       arena: r.arena,
       players: r.size,
     }));
+  }
+
+  stats() {
+    return [...this.rooms.values()].map((r) => ({ id: r.id, ...r.match.stats() }));
   }
 
   closeAll() {
