@@ -33,7 +33,7 @@ function bulletHitsAsteroid(bullet, asteroid, world) {
   if (asteroid.hp > 0) return;
 
   asteroid.kill();
-  bullet.owner.score += SCORE.asteroid;
+  award(world, bullet.owner, SCORE.asteroid);
   explode(world, asteroid.pos, "#b0a090", 18);
   world.emit("exploded", { entity: asteroid });
   // keep the arena populated
@@ -56,13 +56,19 @@ function collect(pickup, ship, world) {
   world.emit("pickup", { ship, effect });
 }
 
+function award(world, ship, points) {
+  ship.score += points;
+  world.emit("score", { ship, points });
+}
+
 function destroyShip(world, ship, killer) {
   ship.kill();
-  if (killer && killer !== ship) killer.score += SCORE.ship;
+  if (killer && killer !== ship) award(world, killer, SCORE.ship);
   explode(world, ship.pos, ship.color, 36);
   world.emit("exploded", { entity: ship });
   world.schedule(SHIP.respawnDelay, () => {
     ship.reset(world.randomSpot(200));
     world.spawn(ship);
+    world.emit("respawned", { ship });
   });
 }

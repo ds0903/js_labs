@@ -24,12 +24,13 @@ export class Ship extends Entity {
   #hp = SHIP.maxHp;
 
   // input only needs isDown(code), so a test can pass a fake one
-  constructor({ input, controls, name = "ship", color = "#cfe3ff" }) {
+  constructor({ input, controls, name = "ship", color = "#cfe3ff", sprite = "ship1" }) {
     super({ kind: "ship", radius: 14, angle: -Math.PI / 2 });
     this.input = input;
     this.controls = controls;
     this.name = name;
     this.color = color;
+    this.sprite = sprite;
     this.score = 0;
     this.thrusting = false;
     this.cooldown = 0;

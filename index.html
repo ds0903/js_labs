@@ -33,12 +33,69 @@
         font-size: 14px;
         color: #cfe3ff;
       }
+      #overlay {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        pointer-events: none;
+        font-family: system-ui, sans-serif;
+        color: #cfe3ff;
+      }
+      #overlay > * {
+        pointer-events: auto;
+      }
+      .panel {
+        width: 340px;
+        padding: 24px;
+        background: #0d1424;
+        border: 1px solid #2a3a5c;
+        border-radius: 8px;
+      }
+      .panel h1 {
+        margin: 0 0 16px;
+        font-size: 24px;
+        text-align: center;
+      }
+      .panel ul {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+      }
+      .panel li {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 8px 0;
+        border-top: 1px solid #1c2740;
+      }
+      .panel input {
+        margin-left: 8px;
+        padding: 4px 8px;
+        background: #070b14;
+        color: inherit;
+        border: 1px solid #2a3a5c;
+        border-radius: 4px;
+      }
+      .error {
+        color: #ff6b6b;
+      }
+      button {
+        padding: 6px 16px;
+        background: #1a2b52;
+        color: #cfe3ff;
+        border: 1px solid #5b8def;
+        border-radius: 4px;
+        cursor: pointer;
+      }
     </style>
   </head>
   <body>
     <canvas id="game"></canvas>
     <pre id="hud"></pre>
     <pre id="scores"></pre>
+    <div id="overlay"></div>
     <script type="module" src="/src/main.js"></script>
   </body>
 </html>

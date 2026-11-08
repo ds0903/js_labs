@@ -3,16 +3,23 @@ import { CONTROLS, Ship } from "./ship.js";
 import { World } from "./world.js";
 
 const PLAYERS = [
-  { name: "P1", color: "#cfe3ff" },
-  { name: "P2", color: "#ffd9a8" },
+  { name: "P1", color: "#cfe3ff", sprite: "ship1" },
+  { name: "P2", color: "#ffd9a8", sprite: "ship2" },
 ];
 
 // Builds a world with ships (one per input), asteroids and a pickup spawner.
-export function createGame({ inputs, asteroids = 6, pickups = true, seed = 1 }) {
+export function createGame({
+  inputs,
+  names = [],
+  asteroids = 6,
+  pickups = true,
+  seed = 1,
+}) {
   const world = new World({ seed });
 
   const ships = inputs.map((input, i) => {
-    const ship = new Ship({ input, controls: CONTROLS[i], ...PLAYERS[i] });
+    const player = { ...PLAYERS[i], name: names[i] ?? PLAYERS[i].name };
+    const ship = new Ship({ input, controls: CONTROLS[i], ...player });
     ship.reset(world.randomSpot(200));
     ship.grace = 0;
     return world.spawn(ship);

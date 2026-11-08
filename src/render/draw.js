@@ -38,7 +38,13 @@ function drawBackground(ctx) {
   }
 }
 
-function drawShip(ctx, ship, x, y, angle, now) {
+// sprite sheets point right (+x), `size` is the width of the whole 64x64 cell
+function drawSprite(ctx, sheet, name, size) {
+  const [sx, sy, sw, sh] = sheet.frames[name];
+  ctx.drawImage(sheet.image, sx, sy, sw, sh, -size / 2, -size / 2, size, size);
+}
+
+function drawShip(ctx, ship, x, y, angle, now, sheet) {
   ctx.save();
   ctx.translate(x, y);
   ctx.rotate(angle);
@@ -56,17 +62,21 @@ function drawShip(ctx, ship, x, y, angle, now) {
 
   // blink while protected after a respawn
   ctx.globalAlpha = ship.grace > 0 && Math.floor(now / 100) % 2 === 0 ? 0.35 : 1;
-  ctx.fillStyle = ship.color;
-  ctx.strokeStyle = "#5b8def";
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.moveTo(20, 0);
-  ctx.lineTo(-13, -12);
-  ctx.lineTo(-7, 0);
-  ctx.lineTo(-13, 12);
-  ctx.closePath();
-  ctx.fill();
-  ctx.stroke();
+  if (sheet) {
+    drawSprite(ctx, sheet, ship.sprite, 46);
+  } else {
+    ctx.fillStyle = ship.color;
+    ctx.strokeStyle = "#5b8def";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(20, 0);
+    ctx.lineTo(-13, -12);
+    ctx.lineTo(-7, 0);
+    ctx.lineTo(-13, 12);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+  }
   ctx.globalAlpha = 1;
 
   if (ship.effects.shield > 0) {
@@ -91,11 +101,22 @@ function outlineFor(id) {
   return outlines.get(id);
 }
 
-function drawAsteroid(ctx, a, x, y, angle) {
-  const outline = outlineFor(a.id);
+function drawAsteroid(ctx, a, x, y, angle, sheet) {
   ctx.save();
   ctx.translate(x, y);
   ctx.rotate(angle);
+  if (sheet) {
+    // the rock in the sheet has a radius of about 25 of 64 pixels
+    drawSprite(
+      ctx,
+      sheet,
+      a.parts.homing ? "asteroidHunter" : "asteroid",
+      (a.radius / 25) * 64,
+    );
+    ctx.restore();
+    return;
+  }
+  const outline = outlineFor(a.id);
   ctx.fillStyle = a.parts.homing ? "#6b3a3a" : "#4a4d57";
   ctx.strokeStyle = a.parts.homing ? "#ff6b6b" : "#9aa0b0";
   ctx.lineWidth = 2;
@@ -114,16 +135,21 @@ function drawAsteroid(ctx, a, x, y, angle) {
 }
 
 const PICKUP_STYLE = {
-  shield: { color: "#78dcff", letter: "S" },
-  rapid: { color: "#ffe066", letter: "R" },
-  homing: { color: "#ff8fa3", letter: "H" },
+  shield: { color: "#78dcff", letter: "S", sprite: "pickupShield" },
+  rapid: { color: "#ffe066", letter: "R", sprite: "pickupRapid" },
+  homing: { color: "#ff8fa3", letter: "H", sprite: "pickupHoming" },
 };
 
-function drawPickup(ctx, p, x, y, now) {
+function drawPickup(ctx, p, x, y, now, sheet) {
   const style = PICKUP_STYLE[p.parts.pickup.effect];
   const pulse = 1 + 0.1 * Math.sin(now / 200);
   ctx.save();
   ctx.translate(x, y);
+  if (sheet) {
+    drawSprite(ctx, sheet, style.sprite, 45 * pulse);
+    ctx.restore();
+    return;
+  }
   ctx.strokeStyle = style.color;
   ctx.lineWidth = 3;
   ctx.beginPath();
@@ -137,7 +163,14 @@ function drawPickup(ctx, p, x, y, now) {
   ctx.restore();
 }
 
-function drawBullet(ctx, b, x, y) {
+function drawBullet(ctx, b, x, y, sheet) {
+  if (sheet) {
+    ctx.save();
+    ctx.translate(x, y);
+    drawSprite(ctx, sheet, b.parts.homing ? "bulletHoming" : "bullet", 40);
+    ctx.restore();
+    return;
+  }
   ctx.fillStyle = b.parts.homing ? "#ff8fa3" : "#fff7b0";
   ctx.beginPath();
   ctx.arc(x, y, b.radius + 1, 0, Math.PI * 2);
@@ -153,8 +186,9 @@ function drawParticle(ctx, p, x, y) {
 
 // Every entity is drawn between its previous and current position,
 // alpha says how far between the two simulation steps we are.
-export function drawScene(view, world, alpha, now) {
+export function drawScene(view, world, alpha, now, sprites) {
   const { ctx, canvas, dpr, scale } = view;
+  const sheet = sprites?.sheet; // without it everything is drawn as vector shapes
 
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.fillStyle = "#000";
@@ -184,12 +218,12 @@ export function drawScene(view, world, alpha, now) {
           const sy = y + dy;
           if (sx < -SHIP_MARGIN || sx > ARENA.width + SHIP_MARGIN) continue;
           if (sy < -SHIP_MARGIN || sy > ARENA.height + SHIP_MARGIN) continue;
-          drawShip(ctx, e, sx, sy, angle, now);
+          drawShip(ctx, e, sx, sy, angle, now, sheet);
         }
       }
-    } else if (e.kind === "asteroid") drawAsteroid(ctx, e, x, y, angle);
-    else if (e.kind === "pickup") drawPickup(ctx, e, x, y, now);
-    else if (e.kind === "bullet") drawBullet(ctx, e, x, y);
+    } else if (e.kind === "asteroid") drawAsteroid(ctx, e, x, y, angle, sheet);
+    else if (e.kind === "pickup") drawPickup(ctx, e, x, y, now, sheet);
+    else if (e.kind === "bullet") drawBullet(ctx, e, x, y, sheet);
     else if (e.kind === "particle") drawParticle(ctx, e, x, y);
   }
 
