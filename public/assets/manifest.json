@@ -1,0 +1,28 @@
+{
+  "sprites": {
+    "sheet": {
+      "url": "/assets/sprites.png",
+      "frames": {
+        "ship1": [0, 0, 64, 64],
+        "ship2": [64, 0, 64, 64],
+        "asteroid": [128, 0, 64, 64],
+        "asteroidHunter": [192, 0, 64, 64],
+        "pickupShield": [0, 64, 64, 64],
+        "pickupRapid": [64, 64, 64, 64],
+        "pickupHoming": [128, 64, 64, 64],
+        "bullet": [192, 64, 64, 64],
+        "bulletHoming": [0, 128, 64, 64]
+      }
+    }
+  },
+  "sounds": {
+    "shoot": "/assets/shoot.wav",
+    "hit": "/assets/hit.wav",
+    "explosion": "/assets/explosion.wav"
+  },
+  "arenas": {
+    "classic": { "asteroids": 6, "pickups": true },
+    "rocks": { "asteroids": 14, "pickups": true },
+    "duel": { "asteroids": 0, "pickups": true }
+  }
+}
