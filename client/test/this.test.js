@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { CONTROLS, Ship } from "../src/sim/ship.js";
-import { Vector2 } from "../src/sim/vector.js";
-import { World } from "../src/sim/world.js";
+import { CONTROLS, Ship } from "shared/sim/ship";
+import { Vector2 } from "shared/sim/vector";
+import { World } from "shared/sim/world";
 
 function setup() {
   const world = new World();

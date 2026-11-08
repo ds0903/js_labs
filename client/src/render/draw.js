@@ -1,5 +1,5 @@
-import { ARENA } from "../sim/arena.js";
-import { mulberry32 } from "../sim/random.js";
+import { ARENA } from "shared/sim/arena";
+import { mulberry32 } from "shared/sim/random";
 import { lerpAngle, lerpWrapped } from "./interpolate.js";
 
 const GRID = 100;

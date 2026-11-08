@@ -1,3 +1,4 @@
+import { createGame } from "shared/sim/game";
 import { devUrl, isAbort, loadAll, loadJson, withRetry } from "./assets/loader.js";
 import { connectAudio, createAudio } from "./audio.js";
 import { burn, createExperimentLoop, createScenario } from "./experiments.js";
@@ -7,7 +8,6 @@ import { Connection, wsUrl } from "./net/connection.js";
 import { Lobby } from "./net/lobby.js";
 import { createView } from "./render/canvas.js";
 import { drawScene } from "./render/draw.js";
-import { createGame } from "./sim/game.js";
 import { createStats } from "./stats.js";
 import { createChatView } from "./ui/chat-view.js";
 import { connectHud } from "./ui/hud.js";

@@ -7,9 +7,12 @@ import { Vector2 } from "./vector.js";
 // `behaviors` (functions run every step) and `parts` (plain data).
 export class Entity {
   static #nextId = 1;
-  #id = Entity.#nextId++;
+  #id;
 
+  // `id` is only passed when the id is decided elsewhere (the server's id on
+  // the client side); otherwise the entity takes the next free one
   constructor({
+    id,
     kind,
     pos = new Vector2(),
     vel = new Vector2(),
@@ -18,6 +21,7 @@ export class Entity {
     edge = "wrap", // "wrap" | "bounce" | "none"
     solid = true,
   }) {
+    this.#id = id ?? Entity.#nextId++;
     this.kind = kind;
     this.pos = pos;
     this.vel = vel;

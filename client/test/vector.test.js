@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { Vector2 } from "../src/sim/vector.js";
+import { Vector2 } from "shared/sim/vector";
 
 test("add returns a new vector and leaves both arguments alone", () => {
   const a = new Vector2(1, 2);

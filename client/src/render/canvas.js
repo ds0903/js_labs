@@ -1,4 +1,4 @@
-import { ARENA } from "../sim/arena.js";
+import { ARENA } from "shared/sim/arena";
 
 // Canvas that fills the window and stays sharp on hi-dpi screens.
 // The backing store is cssSize * devicePixelRatio, the CSS size stays

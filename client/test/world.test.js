@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { Asteroid, Bullet } from "../src/sim/entities.js";
-import { Entity } from "../src/sim/entity.js";
-import { Vector2 } from "../src/sim/vector.js";
-import { World } from "../src/sim/world.js";
+import { Asteroid, Bullet } from "shared/sim/entities";
+import { Entity } from "shared/sim/entity";
+import { Vector2 } from "shared/sim/vector";
+import { World } from "shared/sim/world";
 
 const asteroidAt = (x, y) =>
   new Asteroid({ pos: new Vector2(x, y), vel: new Vector2(), radius: 20 });

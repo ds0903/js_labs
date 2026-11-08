@@ -1,4 +1,4 @@
-import { wrap } from "../sim/arena.js";
+import { wrap } from "shared/sim/arena";
 
 export function lerp(a, b, t) {
   return a + (b - a) * t;

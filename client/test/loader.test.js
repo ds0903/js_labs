@@ -197,7 +197,7 @@ test("lobby: a hanging server gives a timeout error, not an endless wait", async
 });
 
 test("the simulation does not import audio, hud or ui modules", () => {
-  const dir = new URL("../src/sim/", import.meta.url);
+  const dir = new URL("../../shared/src/sim/", import.meta.url);
   for (const file of readdirSync(dir)) {
     const source = readFileSync(new URL(file, dir), "utf8");
     const imports = source.match(/^import .* from .*$/gm) ?? [];
