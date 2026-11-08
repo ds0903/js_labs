@@ -149,10 +149,10 @@ export function createScenario(duration) {
       scenario.result = {
         simTime: time,
         steps,
-        x: ship.x,
-        y: ship.y,
-        vx: ship.vx,
-        vy: ship.vy,
+        x: ship.pos.x,
+        y: ship.pos.y,
+        vx: ship.vel.x,
+        vy: ship.vel.y,
         angle: ship.angle,
       };
       return true;

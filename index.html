@@ -16,20 +16,29 @@
       canvas {
         display: block;
       }
-      #hud {
+      #hud,
+      #scores {
         position: fixed;
         top: 8px;
-        left: 10px;
         margin: 0;
         font: 12px/1.4 ui-monospace, Consolas, monospace;
         color: #7fe0c0;
         pointer-events: none;
+      }
+      #hud {
+        left: 10px;
+      }
+      #scores {
+        right: 10px;
+        font-size: 14px;
+        color: #cfe3ff;
       }
     </style>
   </head>
   <body>
     <canvas id="game"></canvas>
     <pre id="hud"></pre>
+    <pre id="scores"></pre>
     <script type="module" src="/src/main.js"></script>
   </body>
 </html>

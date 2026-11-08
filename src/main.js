@@ -3,8 +3,7 @@ import { createInput } from "./input.js";
 import { createLoop, STEP } from "./loop.js";
 import { createView } from "./render/canvas.js";
 import { drawScene } from "./render/draw.js";
-import { ARENA, wrapShip } from "./sim/arena.js";
-import { createShip, integrate } from "./sim/ship.js";
+import { createGame } from "./sim/game.js";
 import { createStats } from "./stats.js";
 
 const params = new URLSearchParams(location.search);
@@ -15,9 +14,19 @@ const scenario = params.has("scenario") ? createScenario(5) : null;
 const view = createView(document.getElementById("game"));
 const input = scenario ? scenario.input : createInput();
 const hud = document.getElementById("hud");
+const scoreboard = document.getElementById("scores");
 
-let prev = createShip(ARENA.width / 2, ARENA.height / 2);
-let curr = prev;
+const { world, ships } = scenario
+  ? createGame({ inputs: [input], asteroids: 0, pickups: false })
+  : createGame({ inputs: [input, input] });
+
+if (!scenario) {
+  // ship.fire must not be passed to the listener as is: it would be called
+  // without `this`. The arrow function keeps the call as ship.fire().
+  ships.forEach((ship) => {
+    input.onPress(ship.controls.fire, () => ship.fire());
+  });
+}
 
 function simulate(dt) {
   if (scenario) {
@@ -25,18 +34,29 @@ function simulate(dt) {
     dt = scenario.clip(dt);
   }
 
-  prev = curr;
-  curr = wrapShip(integrate(curr, input, dt), ARENA);
+  world.step(dt);
   input.endStep();
 
-  if (scenario?.advance(dt, curr)) {
+  if (scenario?.advance(dt, ships[0])) {
     loop.stop();
     window.__result = scenario.result;
   }
 }
 
+let lastScores = "";
+function showScores() {
+  const text = ships
+    .map((s) => `${s.name}  hp ${String(s.hp).padStart(3)}  score ${s.score}`)
+    .join("\n");
+  if (text !== lastScores) {
+    scoreboard.textContent = text;
+    lastScores = text;
+  }
+}
+
 function render(alpha) {
-  drawScene(view, prev, curr, alpha, performance.now());
+  drawScene(view, world, alpha, performance.now());
+  showScores();
   if (burnIterations) burn(burnIterations);
 }
 
@@ -56,5 +76,6 @@ const loop =
 
 // handles for measuring from the browser console
 window.__stats = stats;
+window.__world = world;
 
 loop.start();
