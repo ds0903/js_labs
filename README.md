@@ -6,19 +6,30 @@
 - лаба 1: ігровий цикл, введення, корабель, три експерименти
 - лаба 2: сутності, World, зіткнення, кулі, композиція (розділ "Лаба 2")
 - лаба 3: завантаження ресурсів, спрайти й звук, лобі по HTTP (розділ "Лаба 3")
+- лаба 4: сервер на Node без фреймворків: HTTP, WebSocket, потоки, логи, вимкнення (розділ "Лаба 4")
 
 ![лаба 1](docs/screenshot.png)
 
 ## Запуск
 
+Два пакети в npm workspaces: `client` (Vite) і `server` (Node + `ws`).
+
 ```
-nvm use          # Node 24, див. .nvmrc
+nvm use               # Node 24, див. .nvmrc
 npm install
-npm run dev      # http://localhost:5173
-npm test         # node --test
-npm run lint     # Biome
-npm run build
+npm run dev:server    # http://127.0.0.1:3000, логи матчів у server/logs
+npm run dev:client    # Vite, проксі /api і /ws на сервер (BACKEND=host:port змінює адресу)
+npm test              # node --test, обидва пакети
+npm run lint          # Biome
+npm run build         # client/dist
+npm start             # сервер віддає client/dist і API на одному порту
 ```
+
+Налаштування сервера через змінні середовища (читаються при старті, помилки показуються всі
+разом, код виходу 2): `PORT`, `HOST`, `LOG_DIR`, `CLIENT_DIR`, `MAX_ROOMS`, `MAX_PLAYERS`,
+`MAX_MESSAGE_BYTES`, `MAX_BODY_BYTES`, `RATE_LIMIT_PER_SEC`, `BUFFERED_LIMIT`,
+`JOIN_TIMEOUT_MS`, `PING_INTERVAL_MS`, `STALE_ROOM_MS`, `ENABLE_SLOW`, `SLOW_MS`. Файл
+`server/.env` підхоплюється, якщо є.
 
 Керування: гравець 1 стрілки і Space, гравець 2 WASD і F (обидва на одній клавіатурі).
 У лівому верхньому куті HUD: steps/s, frames/s, час кадру (середній і максимум за 0,5 с),
@@ -27,34 +38,46 @@ npm run build
 ## Структура
 
 ```
-index.html
-src/main.js            зв'язує все разом, HUD, перемикачі експериментів
-src/loop.js            createLoop: rAF + акумулятор, фіксований крок 1/60 с
-src/stats.js           лічильники steps/s, frames/s, час кадру
-src/input.js           createInput: клавіатура в замиканні
-src/sim/vector.js      Vector2: чисті методи, об'єкт заморожений
-src/sim/entity.js      Entity: id (#id), pos, vel, radius, kind, update
-src/sim/ship.js        Ship extends Entity: #hp, get hp(), fire()
-src/sim/entities.js    Bullet, Asteroid, Particle, фабрики вибуху, астероїда, піккапа
-src/sim/behaviors.js   homing як поведінка (композиція)
-src/sim/world.js       World: Map<id, Entity>, spawn/despawn, sweep, ofKind
-src/sim/collision.js   коло-коло, окрема система
-src/sim/rules.js       що відбувається при зіткненні: шкода, піккап, вибух, рахунок
-src/sim/game.js        збирає світ: кораблі, астероїди, піккапи
-src/sim/arena.js       розмір арени, загортання координат
-src/sim/random.js      детермінований генератор
-src/assets/loader.js   fetchJson, loadImage, loadAudio, withRetry, loadAll
-src/audio.js           AudioContext, відтворення, підписка на події світу
-src/ui/loading.js      екран завантаження на canvas із прогрес-баром
-src/ui/lobby-view.js   DOM лобі, src/ui/hud.js рахунок і повідомлення
-src/net/lobby.js       Lobby extends EventTarget: refresh, join, leave
-public/assets/         manifest.json, sprites.png, три .wav (scripts/gen-assets.mjs)
-vite.config.js         dev-міддлвар: /api/rooms і /slow/<мс>/... для затримок
-test/                  node --test: Vector2, World, this, правила, завантажувач, лобі
-src/render/canvas.js   canvas з devicePixelRatio, масштаб під вікно
-src/render/draw.js     малювання арени, зірок, корабля
-src/render/interpolate.js  lerp, кут, координата через край арени
-src/experiments.js     код для трьох експериментів нижче
+client/index.html
+client/src/main.js            зв'язує все разом, HUD, перемикачі експериментів
+client/src/loop.js            createLoop: rAF + акумулятор, фіксований крок 1/60 с
+client/src/stats.js           лічильники steps/s, frames/s, час кадру
+client/src/input.js           createInput: клавіатура в замиканні, ігнорує поля вводу
+client/src/sim/vector.js      Vector2: чисті методи, об'єкт заморожений
+client/src/sim/entity.js      Entity: id (#id), pos, vel, radius, kind, update
+client/src/sim/ship.js        Ship extends Entity: #hp, get hp(), fire()
+client/src/sim/entities.js    Bullet, Asteroid, Particle, фабрики вибуху, астероїда, піккапа
+client/src/sim/behaviors.js   homing як поведінка (композиція)
+client/src/sim/world.js       World: Map<id, Entity>, spawn/despawn, sweep, ofKind
+client/src/sim/collision.js   коло-коло, окрема система
+client/src/sim/rules.js       що відбувається при зіткненні: шкода, піккап, вибух, рахунок
+client/src/sim/game.js        збирає світ: кораблі, астероїди, піккапи
+client/src/sim/arena.js       розмір арени, загортання координат
+client/src/sim/random.js      детермінований генератор
+client/src/assets/loader.js   fetchJson, postJson, loadImage, loadAudio, withRetry, loadAll
+client/src/audio.js           AudioContext, відтворення, підписка на події світу
+client/src/ui/loading.js      екран завантаження на canvas із прогрес-баром
+client/src/ui/lobby-view.js   DOM лобі зі створенням кімнати, ui/hud.js рахунок, ui/chat-view.js чат
+client/src/net/lobby.js       Lobby extends EventTarget: refresh, create, join, leave
+client/src/net/connection.js  Connection: WebSocket, черга, перепідключення, коди закриття
+client/public/assets/         manifest.json, sprites.png, три .wav (scripts/gen-assets.mjs)
+client/vite.config.js         проксі /api і /ws на сервер, dev-міддлвар /slow/<мс>/...
+client/test/                  node --test: Vector2, World, this, правила, завантажувач, лобі, Connection
+client/src/render/canvas.js   canvas з devicePixelRatio, масштаб під вікно
+client/src/render/draw.js     малювання арени, зірок, корабля
+client/src/render/interpolate.js  lerp, кут, координата через край арени
+client/src/experiments.js     код для трьох експериментів нижче
+server/src/index.js           createApp, createShutdown, installShutdown, main
+server/src/config.js          змінні середовища, перевірка, заморожений конфіг
+server/src/protocol.js        версія, коди закриття, validate(), конструктори повідомлень
+server/src/http.js            маршрути: /health, /api/rooms, /api/replays, /api/slow, статика
+server/src/static.js          безпечний шлях, потокова віддача файлів
+server/src/ws.js              WebSocketServer, ліміти, token bucket, повільні клієнти, heartbeat
+server/src/rooms.js           Room extends EventEmitter, RoomManager
+server/src/log/matchlog.js    events.on -> Readable.from -> Transform -> файл (NDJSON)
+server/src/log/replay.js      async-генератор по рядках логу
+server/test/                  node --test: протокол, конфіг, кімнати, логи, інтеграція з ws-клієнтами
+scripts/                      gen-assets, make-log, rss-test, blocking-demo, crash-demo
 ```
 
 ## Як влаштовано (лаба 1)
@@ -344,8 +367,8 @@ Stretch (ECS на типізованих масивах, просторовий 
 
 `Lobby extends EventTarget` (`refresh()`, `join(roomId, name)`, `leave()`, події `rooms`,
 `error`, `joined`) нічого не знає про DOM, а `lobby-view.js` лише слухає події й малює.
-Кімнати приходять з `/api/rooms` (поки що dev-міддлвар віддає `public/api/rooms.json`, у лабі 4
-це замінить сервер). Оновлення раз на 3 с, поки лобі видно, кожен запит із таймаутом 2,5 с через
+Кімнати приходять з `/api/rooms` (у лабі 3 це був dev-міддлвар із файлом `rooms.json`, у лабі 4
+його замінив справжній сервер). Оновлення раз на 3 с, поки лобі видно, кожен запит із таймаутом 2,5 с через
 `AbortSignal.timeout`, запити не накладаються. `leave()` зупиняє таймер і скасовує запит, який
 ще летить: тест перевіряє, що після `leave()` сигнал запиту `aborted` і подій нема. Join
 запускає локальну гру з налаштуваннями арени кімнати (кількість астероїдів, піккапи).
@@ -469,3 +492,163 @@ Stretch (потоковий прогрес за `Content-Length`, пріорит
 не робив. П'ять консольних дослідів з тексту лаби (`fetch` на 404, `AbortController`,
 необроблений reject тощо) окремо не робив і в README не виписував: у звіт пішли таймінг,
 головоломки й галерея збоїв, а `fetch` на 404 і abort покриті тестами в `test/loader.test.js`.
+
+## Лаба 4: сервер на Node.js
+
+Сервер без фреймворків: `node:http` + бібліотека `ws`. Робить три речі: віддає статику й API,
+тримає кімнати з чатом по WebSocket, пише журнал кожної кімнати у файл. Сама гра поки що
+крутиться в клієнті локально (синхронізація буде в лабі 5), кімната дає список гравців і чат.
+
+![чат у кімнаті](docs/lab4-chat.png)
+
+### Маршрути
+
+| маршрут                   | що робить                                                               |
+| ------------------------- | ----------------------------------------------------------------------- |
+| `GET /health`             | `status`, `uptimeSec`, `rss`, `rooms`, `connections`, `droppedMessages` |
+| `GET /api/rooms`          | список кімнат `{ id, name, arena, players }`                            |
+| `POST /api/rooms`         | створити `{ name, arena }`: 201, 400 (форма), 413 (тіло), 429 (ліміт)   |
+| `GET /api/replays`        | імена файлів логів                                                      |
+| `GET /api/replays/<name>` | журнал кімнати потоком (`application/x-ndjson`)                         |
+| `GET /api/slow`           | тільки з `ENABLE_SLOW=1`: busy-loop на `SLOW_MS`, для демо блокування   |
+| все інше `GET`/`HEAD`     | статика з `client/dist` (потоком, шлях перевіряється)                   |
+
+### Протокол WebSocket (`/ws`, версія 1, лише текстові JSON-кадри)
+
+Клієнт першим повідомленням шле `{ type: "join", v: 1, room, name }`, далі `{ type: "chat", text }`.
+Сервер відповідає `welcome` (id, кімната, гравці), розсилає `roster` при кожному вході/виході й
+`chat` `{ from, text, t }` усім у кімнаті, включно з відправником. Кожен вхідний кадр проходить
+`validate()`, яка повертає результат, а не кидає виняток; зайві поля в повідомленні
+відхиляються. Порушення закривають сокет кодом:
+
+| код  | коли                                                           |
+| ---- | -------------------------------------------------------------- |
+| 1001 | сервер вимикається                                             |
+| 1009 | кадр більший за `MAX_MESSAGE_BYTES` (4096), це робить `ws`     |
+| 4400 | не JSON, не та форма, бінарний кадр, чат до join, другий join  |
+| 4401 | невідомий `type`                                               |
+| 4402 | `v` не дорівнює 1                                              |
+| 4404 | кімнати нема                                                   |
+| 4408 | не було join за `JOIN_TIMEOUT_MS` (5 с)                        |
+| 4409 | кімната повна (`MAX_PLAYERS`, 8)                               |
+| 4413 | клієнт читає так повільно, що буфер перевищив ліміт у 16 разів |
+| 4429 | більше `RATE_LIMIT_PER_SEC` повідомлень на секунду (20)        |
+
+Значення кодів 44xx і цифри лімітів я вибрав сам: лаба їх не задає. Клієнт (`Connection`)
+після будь-якого закриття, крім 4400, 4401, 4402, 4404, 4409, 4429, перепідключається з
+експоненційною паузою (500 мс * 2^спроба, не більше 10 с, jitter 50-100%) і знову шле `join`;
+повідомлення, надіслані поки сокет закритий, стоять у черзі й підуть після `join`. На ці
+шість кодів повторювати марно: сервер відмовив з причини, яка сама не зникне.
+
+### Ліміти
+
+| що                       | значення                                                  | де спрацьовує                          |
+| ------------------------ | --------------------------------------------------------- | -------------------------------------- |
+| розмір WS-кадру          | 4096 байт                                                 | `maxPayload` у `ws`, закриття 1009     |
+| тіло `POST`              | 1024 байти                                                | `readBody`, відповідь 413              |
+| кімнат                   | 20                                                        | `RoomManager.create`, відповідь 429    |
+| гравців у кімнаті        | 8                                                         | `Room.join`, закриття 4409             |
+| повідомлень на секунду   | 20 (token bucket, запас 20)                               | закриття 4429                          |
+| буфер повільного клієнта | 64 КіБ                                                    | чат відкидається, 16 * ліміт: закриття |
+| порожня кімната          | видаляється одразу, а якщо ніхто не зайшов, то через 60 с | таймер без `ref`                       |
+
+### Потоки, backpressure і пам'ять
+
+Журнал кімнати це файл NDJSON. Конвеєр: події кімнати (`events.on(room, "event", { close:
+["empty"] })`) -> `Readable.from` -> `Transform` у режимі об'єктів, що робить рядок JSON ->
+`createWriteStream`, усе через `stream/promises.pipeline`. Файл читається так само потоками:
+`/api/replays/<name>` це `pipeline(createReadStream, res)`, а `replay(file)` це async-генератор
+по `readline`. Жодне місце не читає файл цілком.
+
+Перевірка (`node scripts/rss-test.mjs`): файл 200 МБ, клієнт качає його повільно (пауза після
+кожного шматка), раз на 250 мс читається RSS сервера. Другий учасник: `scripts/naive-server.mjs`,
+де `readFile` читає весь файл у пам'ять перед відправкою.
+
+![RSS при завантаженні 200 МБ](docs/rss.svg)
+
+| сервер               | RSS на старті | пік RSS | завантажено |
+| -------------------- | ------------- | ------- | ----------- |
+| потоки (цей сервер)  | 58 МБ         | 80 МБ   | 200 МБ      |
+| `readFile` (наївний) | 56 МБ         | 257 МБ  | 200 МБ      |
+
+Потоковий сервер піднімає RSS на ~22 МБ незалежно від розміру файлу, а наївний на ~200 МБ, тобто
+на розмір файлу. Механізм: `res` не приймає нові шматки, поки клієнт не вичитав попередні, `pipe`
+ставить `createReadStream` на паузу, і диск не читається швидше, ніж іде мережа. Це і є
+backpressure; при `readFile` ніякої паузи нема, бо весь файл уже в пам'яті. Швидкість клієнта я
+хотів 10 МБ/с, але на Windows `setTimeout` не чекає менше ~15 мс, і реально вийшло ~4 МБ/с (кожен
+прогін близько 50 с). Вимір один раз на кожен сервер, не усереднений.
+
+### Один потік: що робить синхронний обробник
+
+`node scripts/blocking-demo.mjs`: сервер з `ENABLE_SLOW=1`, `/api/slow` крутить цикл 300 мс.
+Один клієнт у кімнаті шле чат кожні 100 мс і міряє, за скільки повідомлення повертається, а
+інший тричі викликає `/api/slow`.
+
+| стан сервера         | повідомлень | медіана | максимум |
+| -------------------- | ----------- | ------- | -------- |
+| простій              | 13          | 0,6 мс  | 0,8 мс   |
+| йдуть виклики `slow` | 17          | 0,8 мс  | 284,9 мс |
+
+Медіана майже не змінилась, бо більшість проб потрапила в паузи між викликами. Максимум показує
+суть: повідомлення, яке прийшло під час циклу, чекає його кінця (~285 мс), бо event loop один, і
+поки виконується синхронний код, нічого більше не читається й не пишеться: ні чат, ні `/health`,
+ні pong для heartbeat. Тому в сервері немає синхронного I/O (`stat`, `readdir`, `readFile`
+скрізь `fs/promises` або потоки), а `/api/slow` вимкнений без `ENABLE_SLOW`.
+
+### Що ламає процес і чому в сервері є слухачі помилок
+
+`node scripts/crash-demo.mjs`, вивід (скорочено):
+
+```
+--- 1. 'error' event with no listener
+exit code: 1
+socket.emit("error", new Error("ECONNRESET: peer went away"));
+Error: ECONNRESET: peer went away
+--- 1b. the same, with a listener
+exit code: 0
+handled: ECONNRESET: peer went away
+--- 2. rejected promise nobody awaits
+exit code: 1
+async function handler() { throw new Error("bad message"); }
+Error: bad message
+--- 2b. the same, with .catch
+exit code: 0
+handled: bad message
+```
+
+`EventEmitter`, який емітить `error` без слухача, кидає виняток, а непіймана помилка в Node
+завершує процес: один обірваний сокет поклав би сервер для всіх. Тому слухач `error` стоїть на
+`WebSocketServer`, на кожному сокеті й на `http.Server`. Те саме з відхиленим промісом: обробник
+HTTP запускається як `handle(req, res).catch(...)`, і HTTP-помилка стає відповіддю 4xx, а решта
+відповіддю 500 з записом у лог.
+
+### Вимкнення
+
+`SIGINT` і `SIGTERM` запускають `app.close()`: перестати приймати нові з'єднання, закрити кожен
+сокет кодом 1001, дочекатись їх (до 1 с, далі `terminate`), закрити кімнати, дочекатись запису
+логів і вийти з кодом 0. Помилка при вимкненні дає код 1. Конфіг з помилками дає код 2 і
+перелік усіх проблем одразу.
+
+### Тести
+
+71 тест у `npm test` (було 35 до лаби): протокол (`validate`, межі, коди), конфіг, кімнати,
+token bucket, політика повільного клієнта на фальшивому сокеті, `resolveStaticPath` (шляхи з
+`..`, `%2e%2e`, `\`, NUL), журнал і `replay`, `Connection` на фальшивому WebSocket (черга, join
+першим, перепідключення, фатальні коди), і інтеграційні тести з реальним сервером на вільному
+порту та клієнтами `ws`: join/чат/roster, усі коди закриття, `autoPong: false` для heartbeat,
+413, 429, потокова віддача логу, вимкнення. Шлях з `..` у запиті `fetch` не перевірити, бо
+`fetch` прибирає `..` сам, тому ці запити йдуть сирим `http.get`.
+
+Тест знайшов реальну помилку: `new URL(req.url)` прибирає `..` ще до перевірки шляху, і
+захист ніколи не бачив спроби. Тепер `serveStatic` бере сирий шлях із `req.url`. Ручна перевірка
+у двох вікнах браузера теж знайшла помилку: лобі кожні 3 с перебудовувало весь список, кнопка
+Join зникала з-під курсора посеред кліку. Тепер рядки оновлюються за id кімнати.
+
+### Що не зроблено (лаба 4)
+
+- Автоматичного тесту на справжній сигнал нема. `createShutdown` перевірено з підміненим
+  `exit`, але зв'язка `process.once("SIGTERM")` перевірена лише читанням коду: на Windows
+  `child.kill("SIGTERM")` просто вбиває процес без обробника.
+- Хостингу й публічної адреси нема, усе перевірено на localhost.
+- Перепідключення в браузері руками не дивився (сервер не рвав), воно покрите тестом на
+  фальшивому сокеті.
