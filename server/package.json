@@ -1,0 +1,13 @@
+{
+  "name": "space-arena-server",
+  "private": true,
+  "version": "0.4.0",
+  "type": "module",
+  "scripts": {
+    "dev": "node --watch --env-file-if-exists=.env src/index.js",
+    "start": "node --env-file-if-exists=.env src/index.js"
+  },
+  "dependencies": {
+    "ws": "^8.22.2"
+  }
+}
