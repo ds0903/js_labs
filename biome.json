@@ -7,7 +7,7 @@
   },
   "files": {
     "ignoreUnknown": true,
-    "includes": ["**", "!package-lock.json", "!public/assets/corrupt.json"]
+    "includes": ["**", "!package-lock.json", "!client/public/assets/corrupt.json"]
   },
   "formatter": {
     "enabled": true,

@@ -1,11 +1,11 @@
 // Generates the game assets so the repo does not depend on downloaded art:
-//   public/assets/sprites.png  sprite sheet, 4x3 cells of 64x64
-//   public/assets/*.wav        three short sounds
+//   client/public/assets/sprites.png  sprite sheet, 4x3 cells of 64x64
+//   client/public/assets/*.wav        three short sounds
 // Run: node scripts/gen-assets.mjs
 import { mkdirSync, writeFileSync } from "node:fs";
 import zlib from "node:zlib";
 
-const OUT = new URL("../public/assets/", import.meta.url);
+const OUT = new URL("../client/public/assets/", import.meta.url);
 mkdirSync(OUT, { recursive: true });
 
 // ---------- sprites ----------

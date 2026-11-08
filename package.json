@@ -1,18 +1,22 @@
 {
   "name": "space-arena",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.4.0",
   "type": "module",
+  "workspaces": [
+    "client",
+    "server"
+  ],
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "preview": "vite preview",
-    "test": "node --test",
+    "dev:client": "npm run dev -w client",
+    "dev:server": "npm run dev -w server",
+    "build": "npm run build -w client",
+    "start": "npm run start -w server",
+    "test": "node --test \"client/test/*.test.js\" \"server/test/*.test.js\"",
     "lint": "biome check .",
     "format": "biome check --write ."
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.6.6",
-    "vite": "^8.3.6"
+    "@biomejs/biome": "^2.6.6"
   }
 }
