@@ -3,9 +3,9 @@ import { test } from "node:test";
 import { applyCommand, createMatch, DT } from "shared/sim/match";
 import { describe, id16 } from "shared/sim/snapshot";
 import { Vector2 } from "shared/sim/vector";
-import { createInterpolator } from "../src/net/interp.js";
-import { createNetStats, netgraphLines } from "../src/net/netgraph.js";
-import { createPredictor } from "../src/net/predict.js";
+import { createInterpolator } from "../src/net/interp.ts";
+import { createNetStats, netgraphLines } from "../src/net/netgraph.ts";
+import { createPredictor } from "../src/net/predict.ts";
 
 // ---------- a tiny fake network around the shared simulation ----------
 
@@ -149,7 +149,7 @@ test("a predicted bullet stays while the server has the same one and goes when i
 test("replaying inputs after a snapshot does not spawn bullets or events again", () => {
   const { predictor, server } = rig();
   let fired = 0;
-  predictor.world.addEventListener("fired", () => fired++);
+  predictor.world.on("fired", () => fired++);
   for (let i = 0; i < 14; i++) {
     predictor.step({ thrust: true, turn: 0, fire: i === 2 || i === 12 }, 0);
   }

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { backoff, Connection, wsUrl } from "../src/net/connection.js";
+import { backoff, Connection, wsUrl } from "../src/net/connection.ts";
 
 // A WebSocket stand-in that the test drives by hand.
 class FakeSocket extends EventTarget {
@@ -44,7 +44,7 @@ function setup(delay = () => 5) {
     },
   });
   const statuses = [];
-  connection.addEventListener("status", (e) => statuses.push(e.detail));
+  connection.on("status", (status) => statuses.push(status));
   return { connection, sockets, statuses };
 }
 
@@ -71,10 +71,13 @@ test("join goes first when the socket opens, queued messages after it", () => {
 test("incoming messages become events", () => {
   const { connection, sockets } = setup();
   const got = [];
-  connection.addEventListener("message", (e) => got.push(e.detail));
+  connection.on("message", (message) => got.push(message));
   sockets[0].open();
   sockets[0].receive({ type: "roster", players: [] });
   sockets[0].dispatchEvent(Object.assign(new Event("message"), { data: "not json" }));
+  // valid json, but not a message of the protocol: the schema refuses it
+  sockets[0].receive({ type: "roster", players: "nobody" });
+  sockets[0].receive({ type: "teleport", x: 1 });
   assert.deepEqual(got, [{ type: "roster", players: [] }]);
 });
 
@@ -115,7 +118,7 @@ test("fatal close codes end the connection without retrying", async () => {
   for (const code of [4400, 4401, 4402, 4404, 4409, 4429]) {
     const { connection, sockets } = setup();
     const closed = [];
-    connection.addEventListener("closed", (e) => closed.push(e.detail));
+    connection.on("closed", (detail) => closed.push(detail));
     sockets[0].open();
     sockets[0].drop(code, "because");
     await wait(20);

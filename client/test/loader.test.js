@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
 import { afterEach, test } from "node:test";
-import { HttpError, isTransient, loadAll, withRetry } from "../src/assets/loader.js";
-import { Lobby } from "../src/net/lobby.js";
+import { HttpError, isTransient, loadAll, withRetry } from "../src/assets/loader.ts";
+import { Lobby } from "../src/net/lobby.ts";
 
 const realFetch = globalThis.fetch;
 afterEach(() => {
@@ -170,8 +170,8 @@ test("lobby: refresh emits rooms, leave aborts the request in flight", async () 
 
   const lobby = new Lobby({ intervalMs: 10_000 });
   const events = [];
-  lobby.addEventListener("rooms", (e) => events.push(["rooms", e.detail]));
-  lobby.addEventListener("error", (e) => events.push(["error", e.detail]));
+  lobby.on("rooms", (list) => events.push(["rooms", list]));
+  lobby.on("error", (error) => events.push(["error", error]));
 
   lobby.start();
   await wait(60);
@@ -188,7 +188,7 @@ test("lobby: a hanging server gives a timeout error, not an endless wait", async
   globalThis.fetch = (_url, { signal }) => wait(10_000, signal);
   const lobby = new Lobby({ timeoutMs: 30, intervalMs: 10_000 });
   const errors = [];
-  lobby.addEventListener("error", (e) => errors.push(e.detail));
+  lobby.on("error", (error) => errors.push(error));
   lobby.start();
   await wait(120);
   lobby.leave();
