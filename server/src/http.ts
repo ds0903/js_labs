@@ -7,9 +7,11 @@ import { ARENAS, isArenaName } from "shared/sim/game";
 import type { ServerConfig } from "./config.ts";
 import { LimitError, type RoomManager } from "./rooms.ts";
 import { serveStatic } from "./static.ts";
+import type { Metrics } from "./types.ts";
 
 const ARENA_NAMES = Object.keys(ARENAS);
 let lastElu = performance.eventLoopUtilization();
+let lastMetricsElu = performance.eventLoopUtilization();
 
 export class HttpError extends Error {
   readonly status: number;
@@ -103,18 +105,102 @@ function parseBotCount(text: string): number {
 export interface HandlerDeps {
   config: ServerConfig;
   rooms: RoomManager;
-  stats: { dropped: number };
+  stats: Metrics;
   connections: () => number;
+  // false while the server is shutting down: the platform stops sending traffic
+  ready?: () => boolean;
 }
 
-export function createHandler({ config, rooms, stats, connections }: HandlerDeps) {
+// Prometheus text format: counters only go up, gauges are the state right now
+function renderMetrics(
+  config: ServerConfig,
+  rooms: RoomManager,
+  stats: Metrics,
+  connections: number,
+): string {
+  const now = performance.eventLoopUtilization();
+  const elu = performance.eventLoopUtilization(now, lastMetricsElu).utilization;
+  lastMetricsElu = now;
+
+  const roomStats = rooms.stats();
+  const players = roomStats.reduce((sum, r) => sum + r.players, 0);
+  const tickP99 = Math.max(0, ...roomStats.map((r) => r.tickHistoryMs.p99));
+  const lines: string[] = [];
+  const metric = (
+    name: string,
+    type: "gauge" | "counter",
+    help: string,
+    value: number,
+  ) => {
+    lines.push(`# HELP ${name} ${help}`, `# TYPE ${name} ${type}`, `${name} ${value}`);
+  };
+
+  lines.push("# TYPE arena_info gauge", `arena_info{version="${config.version}"} 1`);
+  metric("arena_connections", "gauge", "open WebSocket connections", connections);
+  metric("arena_rooms", "gauge", "rooms", rooms.rooms.size);
+  metric("arena_players", "gauge", "players and bots in rooms", players);
+  metric("arena_messages_in_total", "counter", "messages received", stats.messagesIn);
+  metric("arena_messages_out_total", "counter", "messages sent", stats.messagesOut);
+  metric("arena_bytes_in_total", "counter", "bytes received", stats.bytesIn);
+  metric("arena_bytes_out_total", "counter", "bytes sent", stats.bytesOut);
+  metric(
+    "arena_dropped_total",
+    "counter",
+    "frames dropped for slow clients",
+    stats.dropped,
+  );
+  metric(
+    "arena_tick_p99_ms",
+    "gauge",
+    "worst room tick duration, 99th percentile",
+    tickP99,
+  );
+  metric(
+    "arena_event_loop_utilization",
+    "gauge",
+    "event loop busy share since last scrape",
+    elu,
+  );
+  metric("arena_rss_bytes", "gauge", "resident set size", process.memoryUsage().rss);
+  lines.push("# HELP arena_rejected_total connections refused or closed, by reason");
+  lines.push("# TYPE arena_rejected_total counter");
+  for (const [reason, count] of Object.entries(stats.rejected)) {
+    lines.push(`arena_rejected_total{reason="${reason}"} ${count}`);
+  }
+  return `${lines.join("\n")}\n`;
+}
+
+export function createHandler({
+  config,
+  rooms,
+  stats,
+  connections,
+  ready = () => true,
+}: HandlerDeps) {
   return async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> {
     const { pathname } = new URL(req.url ?? "/", "http://localhost");
     const method = req.method;
 
+    // readiness: "can I take traffic". Liveness (/health) stays 200 while shutting down.
+    if (pathname === "/ready" && method === "GET") {
+      const isReady = ready();
+      return sendJson(res, isReady ? 200 : 503, { ready: isReady });
+    }
+
+    if (pathname === "/metrics" && method === "GET") {
+      const body = renderMetrics(config, rooms, stats, connections());
+      res.writeHead(200, {
+        "Content-Type": "text/plain; version=0.0.4; charset=utf-8",
+        "Content-Length": Buffer.byteLength(body),
+      });
+      res.end(body);
+      return;
+    }
+
     if (pathname === "/health" && method === "GET") {
       return sendJson(res, 200, {
         status: "ok",
+        version: config.version,
         uptimeSec: Math.round(process.uptime()),
         rss: process.memoryUsage().rss,
         rooms: rooms.rooms.size,

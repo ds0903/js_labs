@@ -18,6 +18,30 @@ export interface SendOptions {
   game?: boolean;
 }
 
+// Counters for /metrics. They only go up; the dashboard turns them into rates.
+export interface Metrics {
+  dropped: number; // snapshots and chat dropped for slow clients
+  messagesIn: number;
+  messagesOut: number;
+  bytesIn: number;
+  bytesOut: number;
+  // why connections were refused or closed: "origin", "ip_limit", "close_4429", ...
+  rejected: Record<string, number>;
+}
+
+export const createMetrics = (): Metrics => ({
+  dropped: 0,
+  messagesIn: 0,
+  messagesOut: 0,
+  bytesIn: 0,
+  bytesOut: 0,
+  rejected: {},
+});
+
+export function reject(metrics: Metrics, reason: string): void {
+  metrics.rejected[reason] = (metrics.rejected[reason] ?? 0) + 1;
+}
+
 // One connected player as the rooms and the match see it.
 export interface Player {
   readonly id: string;

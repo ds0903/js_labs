@@ -47,6 +47,12 @@ const EnvSchema = z
     STALE_ROOM_MS: int(60_000, 10, 3_600_000),
     ENABLE_SLOW: flag,
     SLOW_MS: int(300, 1, 10_000),
+    // production: where the page may come from, and how many sockets one address may hold
+    ALLOWED_ORIGINS: z.string().optional(),
+    MAX_CONNECTIONS_PER_IP: int(20, 1, 10_000),
+    TRUST_PROXY: flag,
+    LOG_LEVEL: z.enum(["debug", "info", "warn", "error"]).optional(),
+    GIT_SHA: z.string().optional(),
   })
   .transform((env) => ({
     port: env.PORT,
@@ -69,6 +75,15 @@ const EnvSchema = z
     staleRoomMs: env.STALE_ROOM_MS,
     enableSlow: env.ENABLE_SLOW,
     slowMs: env.SLOW_MS,
+    // empty list: any origin may connect (development)
+    allowedOrigins: (env.ALLOWED_ORIGINS ?? "")
+      .split(",")
+      .map((origin) => origin.trim())
+      .filter(Boolean),
+    maxConnectionsPerIp: env.MAX_CONNECTIONS_PER_IP,
+    trustProxy: env.TRUST_PROXY,
+    logLevel: env.LOG_LEVEL ?? "info",
+    version: env.GIT_SHA || "dev",
   }));
 
 export type ServerConfig = Readonly<z.output<typeof EnvSchema>>;

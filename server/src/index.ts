@@ -2,9 +2,10 @@ import http from "node:http";
 import { pathToFileURL } from "node:url";
 import { ConfigError, loadConfig, type ServerConfig } from "./config.ts";
 import { createHandler, HttpError, sendJson } from "./http.ts";
+import { createLogger } from "./log/logger.ts";
 import { CLOSE } from "./protocol.ts";
 import { RoomManager } from "./rooms.ts";
-import type { Logger } from "./types.ts";
+import { createMetrics, type Logger } from "./types.ts";
 import { attachWebSocket } from "./ws.ts";
 
 const stamp = () => new Date().toISOString();
@@ -25,7 +26,8 @@ export function createApp(
   config: ServerConfig = loadConfig(),
   { log = consoleLog }: { log?: Logger } = {},
 ) {
-  const stats = { dropped: 0 };
+  const stats = createMetrics();
+  const lifecycle = { shuttingDown: false };
   const rooms = new RoomManager({
     ...config,
     onError: (error) => log.error("match log failed", error.message),
@@ -38,6 +40,7 @@ export function createApp(
     rooms,
     stats,
     connections: () => wss.clients.size,
+    ready: () => !lifecycle.shuttingDown,
   });
 
   server.on("request", (req, res) => {
@@ -81,6 +84,7 @@ export function createApp(
 
     // stop accepting, say goodbye to every socket, flush the match logs
     async close(): Promise<void> {
+      lifecycle.shuttingDown = true; // /ready answers 503 from now on
       const closed = new Promise<void>((resolve) => server.close(() => resolve()));
       server.closeIdleConnections();
       for (const ws of wss.clients) ws.close(CLOSE.GOING_AWAY, "server shutting down");
@@ -140,10 +144,24 @@ async function main(): Promise<void> {
     }
     throw error;
   }
-  const app = createApp(config);
-  installShutdown(app);
+  const log = createLogger(config.logLevel, config.version);
+  // A thrown error nobody caught or a promise nobody handled means the process
+  // is in a state nobody planned for: log it with the stack and exit non-zero,
+  // the supervisor starts a clean one. (Staying up would hide the bug.)
+  for (const event of ["uncaughtException", "unhandledRejection"] as const) {
+    process.on(event, (reason) => {
+      log.error(
+        `fatal ${event}`,
+        reason instanceof Error ? reason : new Error(String(reason)),
+      );
+      process.exit(1);
+    });
+  }
+
+  const app = createApp(config, { log });
+  installShutdown(app, { log });
   const port = await app.listen();
-  consoleLog.info(`listening on http://${config.host}:${port}, logs in ${config.logDir}`);
+  log.info({ port, host: config.host, logDir: config.logDir }, "listening");
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

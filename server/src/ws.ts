@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import type { Server } from "node:http";
+import type { IncomingMessage, Server } from "node:http";
 import { decodeInput } from "shared/codec/binary";
 import { CLOSE, type CodecName, type Command, parseClientText } from "shared/protocol";
 import { TICK_RATE } from "shared/sim/match";
@@ -8,7 +8,15 @@ import type { ServerConfig } from "./config.ts";
 import { createNetSim, type NetSim, type NetSimSettings } from "./netsim.ts";
 import { welcome } from "./protocol.ts";
 import type { Room, RoomManager } from "./rooms.ts";
-import type { Logger, Outgoing, Player, SendOptions } from "./types.ts";
+import {
+  createMetrics,
+  type Logger,
+  type Metrics,
+  type Outgoing,
+  type Player,
+  reject,
+  type SendOptions,
+} from "./types.ts";
 
 export interface Bucket {
   take(): boolean;
@@ -45,7 +53,7 @@ export type SocketLike = Pick<
 // (a string or a binary frame from a codec).
 export function createSender(
   config: Pick<ServerConfig, "bufferedLimit">,
-  stats: { dropped: number } = { dropped: 0 },
+  stats: Pick<Metrics, "dropped" | "messagesOut" | "bytesOut"> = createMetrics(),
 ) {
   return function send(
     ws: SocketLike,
@@ -67,7 +75,11 @@ export function createSender(
       typeof message === "string" ||
       ArrayBuffer.isView(message) ||
       message instanceof ArrayBuffer;
-    ws.send(encoded ? message : JSON.stringify(message), () => {});
+    const payload = encoded ? message : JSON.stringify(message);
+    ws.send(payload, () => {});
+    stats.messagesOut++;
+    stats.bytesOut +=
+      typeof payload === "string" ? Buffer.byteLength(payload) : payload.byteLength;
     return true;
   };
 }
@@ -99,15 +111,47 @@ interface ConnectionState {
 export interface WsDeps {
   rooms: RoomManager;
   config: ServerConfig;
-  stats: { dropped: number };
+  stats: Metrics;
   log: Logger;
 }
 
+// the address a socket counts against: behind a proxy it is the first entry of
+// X-Forwarded-For (only trusted when TRUST_PROXY is set, anybody can send it)
+function clientIp(req: IncomingMessage, trustProxy: boolean): string {
+  const forwarded = req.headers["x-forwarded-for"];
+  if (trustProxy && typeof forwarded === "string") {
+    const first = forwarded.split(",")[0]?.trim();
+    if (first) return first;
+  }
+  return req.socket.remoteAddress ?? "unknown";
+}
+
 export function attachWebSocket(server: Server, { rooms, config, stats, log }: WsDeps) {
+  const perIp = new Map<string, number>(); // open sockets per address
+
+  // The browser does not apply CORS to WebSockets, so the handshake is where
+  // another site's page is turned away.
   const wss = new WebSocketServer({
     server,
     path: "/ws",
     maxPayload: config.maxMessageBytes,
+    verifyClient: ({ origin, req }, done) => {
+      if (config.allowedOrigins.length > 0 && !config.allowedOrigins.includes(origin)) {
+        reject(stats, "origin");
+        log.warn({ origin }, "ws.rejected origin");
+        done(false, 403, "origin not allowed");
+        return;
+      }
+      if (
+        (perIp.get(clientIp(req, config.trustProxy)) ?? 0) >= config.maxConnectionsPerIp
+      ) {
+        reject(stats, "ip_limit");
+        log.warn({ ip: clientIp(req, config.trustProxy) }, "ws.rejected ip_limit");
+        done(false, 429, "too many connections");
+        return;
+      }
+      done(true);
+    },
   });
   const send = createSender(config, stats);
   const states = new WeakMap<WebSocket, ConnectionState>();
@@ -128,8 +172,20 @@ export function attachWebSocket(server: Server, { rooms, config, stats, log }: W
     };
     states.set(ws, state);
 
+    const ip = clientIp(req, config.trustProxy);
+    perIp.set(ip, (perIp.get(ip) ?? 0) + 1);
+    ws.once("close", () => {
+      const left = (perIp.get(ip) ?? 1) - 1;
+      if (left <= 0) perIp.delete(ip);
+      else perIp.set(ip, left);
+    });
+
+    // log fields, so a match can be filtered by room and player
+    const fields = () => ({ playerId: state.id, roomId: state.room?.id });
+
     const close = (code: number, reason: string): void => {
-      log.warn(`close ${code} (${reason}) player=${state.id}`);
+      reject(stats, `close_${code}`);
+      log.warn(fields(), `ws.closed ${code} (${reason})`);
       ws.close(code, reason);
     };
     // everything that goes out passes the latency injector (if it is on)
@@ -147,9 +203,7 @@ export function attachWebSocket(server: Server, { rooms, config, stats, log }: W
       config.joinTimeoutMs,
     );
 
-    ws.on("error", (error) =>
-      log.warn(`socket error player=${state.id}: ${error.message}`),
-    );
+    ws.on("error", (error) => log.warn(fields(), `ws.error ${error.message}`));
     ws.on("pong", () => {
       state.missedPongs = 0;
     });
@@ -206,6 +260,7 @@ export function attachWebSocket(server: Server, { rooms, config, stats, log }: W
           if (!room.join(player)) return close(CLOSE.ROOM_FULL, "room is full");
           state.room = room;
           clearTimeout(joinTimer);
+          log.info({ ...fields(), name: msg.name }, "player.joined");
           // the match gave the player a ship while it was joining
           if (player.shipId === undefined)
             return close(CLOSE.ROOM_NOT_FOUND, "room has no match");
@@ -243,6 +298,8 @@ export function attachWebSocket(server: Server, { rooms, config, stats, log }: W
     // only inputs can be "lost" by the injector, chat and join cannot
     ws.on("message", (raw, isBinary) => {
       const data = toBuffer(raw);
+      stats.messagesIn++;
+      stats.bytesIn += data.length;
       const droppable =
         isBinary || data.toString("utf8", 0, 16).startsWith('{"type":"input"');
       state.net.run("in", () => handle(data, isBinary), { droppable });
@@ -250,6 +307,7 @@ export function attachWebSocket(server: Server, { rooms, config, stats, log }: W
 
     ws.on("close", () => {
       clearTimeout(joinTimer);
+      if (state.room) log.info(fields(), "player.left");
       state.room?.leave(state.id);
     });
   });
@@ -261,7 +319,8 @@ export function attachWebSocket(server: Server, { rooms, config, stats, log }: W
       const state = states.get(ws);
       if (!state) continue;
       if (state.missedPongs >= 2) {
-        log.warn(`heartbeat lost player=${state.id}`);
+        reject(stats, "heartbeat");
+        log.warn({ playerId: state.id, roomId: state.room?.id }, "ws.heartbeat_lost");
         ws.terminate();
         continue;
       }
