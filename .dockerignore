@@ -1,0 +1,16 @@
+node_modules
+**/node_modules
+.git
+.github
+.idea
+.vscode
+.env
+dist
+**/dist
+server/logs
+coverage
+test-results
+playwright-report
+docs
+e2e
+*.log

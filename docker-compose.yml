@@ -1,0 +1,21 @@
+# A production-like run on one machine:  docker compose up --build
+services:
+  arena:
+    build:
+      context: .
+      args:
+        GIT_SHA: ${GIT_SHA:-local}
+    ports:
+      - "3000:3000"
+    environment:
+      LOG_LEVEL: info
+      # the page is served from this address; sockets from other sites are refused
+      ALLOWED_ORIGINS: http://localhost:3000,http://127.0.0.1:3000
+      MAX_CONNECTIONS_PER_IP: "20"
+    volumes:
+      - match-logs:/app/server/logs
+    stop_grace_period: 15s
+    restart: unless-stopped
+
+volumes:
+  match-logs:
