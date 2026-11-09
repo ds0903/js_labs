@@ -150,6 +150,7 @@ export class Match {
   // applied as ship-only steps; no input at all freezes the ship for the tick.
   #consume(entry) {
     const { ship, queue } = entry;
+    ship.idle = false; // a tick without input may have left it set
     while (queue.length > this.maxInputQueue) {
       this.#apply(entry, queue.shift());
       if (ship.alive) ship.update(DT);

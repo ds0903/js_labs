@@ -151,7 +151,14 @@ export function attachWebSocket(server, { rooms, config, stats, log }) {
         state.room = room;
         clearTimeout(joinTimer);
         player.send(
-          welcome(state.id, room.id, player.shipId, room.listPlayers(), TICK_RATE),
+          welcome(
+            state.id,
+            room.id,
+            player.shipId,
+            room.listPlayers(),
+            TICK_RATE,
+            config.enableNetsim,
+          ),
         );
       } else if (!state.room && msg.type !== "ping") {
         close(CLOSE.BAD_MESSAGE, "join first");

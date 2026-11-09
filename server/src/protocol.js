@@ -113,7 +113,7 @@ export function validate(raw) {
   }
 }
 
-export const welcome = (id, room, ship, players, tickRate) => ({
+export const welcome = (id, room, ship, players, tickRate, netsim = false) => ({
   type: "welcome",
   v: PROTOCOL_VERSION,
   id,
@@ -121,6 +121,7 @@ export const welcome = (id, room, ship, players, tickRate) => ({
   ship,
   players,
   tickRate,
+  netsim,
 });
 export const roster = (players) => ({ type: "roster", players });
 export const chat = (from, message, t = Date.now()) => ({

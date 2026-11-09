@@ -118,6 +118,41 @@ test("match: the server and a client that replays the same inputs agree exactly"
   match.stop();
 });
 
+test("match: starving for a while and then getting a burst still matches a plain replay", () => {
+  const { room, match, player } = setup({ maxInputQueue: 3 });
+  const p = player("a");
+  room.join(p);
+
+  // reference: a lone ship that gets exactly the inputs the server applied
+  const refInput = commandInput();
+  const ref = new Ship({ input: refInput, controls: NET_CONTROLS });
+  ref.restore(describe(match.players.get("a").ship));
+
+  const cmds = [];
+  let seq = 0;
+  // 3 ticks with nothing, then 8 inputs at once, then 4 ticks of one by one
+  for (const count of [0, 0, 0, 8, 1, 1, 1, 1]) {
+    for (let i = 0; i < count; i++) {
+      const c = cmd(++seq, { thrust: true, turn: seq % 3 === 0 ? 1 : 0 });
+      cmds.push(c);
+      match.input("a", c);
+    }
+    match.runTick();
+  }
+  const server = lastSnapshot(p);
+  assert.ok(server.ack > 6, `ack ${server.ack}`);
+  assert.ok(match.stats().catchUpSteps > 0);
+
+  for (const c of cmds.filter((c) => c.seq <= server.ack)) {
+    applyCommand(ref, refInput, c);
+    ref.update(DT);
+  }
+  const me = server.entities.find((e) => e.kind === "ship");
+  assert.ok(Math.abs(me.x - ref.pos.x) < 1e-9, `x ${me.x} vs ${ref.pos.x}`);
+  assert.ok(Math.abs(me.y - ref.pos.y) < 1e-9, `y ${me.y} vs ${ref.pos.y}`);
+  match.stop();
+});
+
 test("match: binary players get binary snapshots, json players get text", () => {
   const { room, match, player } = setup();
   const a = player("a", "binary");
@@ -165,7 +200,7 @@ test("netsim: delays by half the latency each way, keeps order, drops only dropp
   const randoms = [0.99, 1, 0, 0.1];
   const net = createNetSim(
     { latency: 100, jitter: 40, drop: 50 },
-    { now: () => 0, random: () => randoms.shift() },
+    { random: () => randoms.shift() },
   );
   const seen = [];
   // drop check 0.99 -> kept; wait random 1 -> 50 + 20 = 70 ms
@@ -184,6 +219,34 @@ test("netsim: delays by half the latency each way, keeps order, drops only dropp
     ran = true;
   });
   assert.equal(ran, true); // inactive: runs right away
+});
+
+test("netsim: frames sent 1 ms apart with 100 ms of jitter still arrive in order", async () => {
+  const net = createNetSim({ latency: 40, jitter: 100, drop: 0 });
+  const got = [];
+  for (let i = 0; i < 300; i++) {
+    net.run("in", () => got.push(i));
+    if (i % 3 === 0) await new Promise((resolve) => setTimeout(resolve, 1));
+  }
+  await new Promise((resolve) => setTimeout(resolve, 250));
+  assert.equal(got.length, 300);
+  assert.deepEqual(
+    got,
+    got.toSorted((a, b) => a - b),
+  );
+});
+
+test("netsim: switched off while frames wait, new frames queue behind them", async () => {
+  const net = createNetSim({ latency: 100, jitter: 0, drop: 0 });
+  const got = [];
+  net.run("out", () => got.push("old"));
+  net.set({ latency: 0, jitter: 0, drop: 0 });
+  net.run("out", () => got.push("new")); // would run at once, but "old" is still on its way
+  assert.deepEqual(got, []);
+  await new Promise((resolve) => setTimeout(resolve, 120));
+  assert.deepEqual(got, ["old", "new"]);
+  net.run("out", () => got.push("later"));
+  assert.deepEqual(got, ["old", "new", "later"]); // nothing waiting: immediate again
 });
 
 test("server: binary inputs move the ship, snapshots carry the ack, ping gets a pong", async () => {
