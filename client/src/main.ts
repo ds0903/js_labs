@@ -39,6 +39,20 @@ const overlay = query(document, "#overlay", HTMLElement);
 const hud = query(document, "#hud", HTMLElement);
 const scoreboard = query(document, "#scores", HTMLElement);
 
+// which build is running: the server reports it in /health
+const versionLabel = query(document, "#version", HTMLElement);
+fetch("/health")
+  .then((response) => response.json())
+  .then((health: { version?: string }) => {
+    if (health.version) versionLabel.textContent = health.version;
+  })
+  .catch(() => {});
+
+// installable + shell cached; the dev server serves its own modules, so skip it there
+if ("serviceWorker" in navigator && import.meta.env.PROD) {
+  navigator.serviceWorker.register("/sw.js").catch(() => {});
+}
+
 interface LocalGame {
   config: Partial<ArenaPreset>;
   sprites?: Sprites;

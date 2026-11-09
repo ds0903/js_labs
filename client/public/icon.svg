@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <title>Space Arena</title>
+  <rect width="512" height="512" fill="#05070d"/>
+  <circle cx="90" cy="110" r="3" fill="#cfe3ff"/>
+  <circle cx="420" cy="80" r="2" fill="#cfe3ff"/>
+  <circle cx="450" cy="400" r="3" fill="#cfe3ff"/>
+  <circle cx="70" cy="420" r="2" fill="#cfe3ff"/>
+  <path d="M256 96 L352 384 L256 336 L160 384 Z" fill="#7fe0c0" stroke="#cfe3ff" stroke-width="10" stroke-linejoin="round"/>
+</svg>
