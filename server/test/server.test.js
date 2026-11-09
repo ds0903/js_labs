@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import http from "node:http";
 import path from "node:path";
-import { test } from "node:test";
+import { test } from "vitest";
 import { createShutdown } from "../src/index.ts";
 import { replay } from "../src/log/replay.ts";
 import { closed, connect, createRoom, join, silent, startApp, until } from "./helpers.js";

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { test } from "vitest";
 import { backoff, Connection, wsUrl } from "../src/net/connection.ts";
 
 // A WebSocket stand-in that the test drives by hand.

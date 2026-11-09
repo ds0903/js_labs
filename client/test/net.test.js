@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
 import { applyCommand, createMatch, DT } from "shared/sim/match";
 import { describe, id16 } from "shared/sim/snapshot";
 import { Vector2 } from "shared/sim/vector";
+import { test } from "vitest";
 import { createInterpolator } from "../src/net/interp.ts";
 import { createNetStats, netgraphLines } from "../src/net/netgraph.ts";
 import { createPredictor } from "../src/net/predict.ts";

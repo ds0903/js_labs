@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
-import { test } from "node:test";
 import { CommandSchema } from "shared/protocol";
 import { NEUTRAL } from "shared/sim/commands";
 import { applyCommand, createMatch, DT } from "shared/sim/match";
 import { runScripted, stateHash } from "shared/sim/replay";
 import { describe, id16, normalizeAngle, snapshotWorld } from "shared/sim/snapshot";
+import { test } from "vitest";
 
 // Changing the simulation changes this number. That is the point: the client
 // and the server must agree, so a change has to be made on purpose.

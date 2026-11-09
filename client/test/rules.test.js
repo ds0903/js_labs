@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
 import { withHoming } from "shared/sim/behaviors";
 import { Asteroid, Bullet, spawnPickup } from "shared/sim/entities";
 import { createGame } from "shared/sim/game";
 import { CONTROLS, SHIP, Ship } from "shared/sim/ship";
 import { Vector2 } from "shared/sim/vector";
 import { World } from "shared/sim/world";
+import { test } from "vitest";
 
 const idle = { isDown: () => false };
 const STEP = 1 / 60;

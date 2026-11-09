@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
-import { afterEach, test } from "node:test";
+import { afterEach, test } from "vitest";
 import { HttpError, isTransient, loadAll, withRetry } from "../src/assets/loader.ts";
 import { Lobby } from "../src/net/lobby.ts";
 

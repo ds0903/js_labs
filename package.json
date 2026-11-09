@@ -13,15 +13,21 @@
     "dev:server": "npm run dev -w server",
     "build": "npm run build -w client",
     "start": "npm run start -w server",
-    "test": "node --test \"shared/test/*.test.js\" \"client/test/*.test.js\" \"server/test/*.test.js\"",
+    "test": "vitest run",
+    "coverage": "vitest run --coverage",
+    "e2e": "playwright test",
     "typecheck": "tsc --noEmit -p shared && tsc --noEmit -p server && tsc --noEmit -p client",
     "lint": "biome check .",
     "format": "biome check --write ."
   },
   "devDependencies": {
     "@biomejs/biome": "^2.6.6",
+    "@playwright/test": "^1.65.0",
     "@types/node": "^26.6.6",
     "@types/ws": "^8.18.2",
-    "typescript": "^7.0.2"
+    "@vitest/coverage-v8": "^5.1.0",
+    "fast-check": "^4.10.2",
+    "typescript": "^7.0.2",
+    "vitest": "^5.1.0"
   }
 }

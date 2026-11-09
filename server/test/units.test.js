@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
-import { test } from "node:test";
+import { test } from "vitest";
 import { ConfigError, loadConfig } from "../src/config.ts";
 import { toNdjson } from "../src/log/matchlog.ts";
 import { replay } from "../src/log/replay.ts";

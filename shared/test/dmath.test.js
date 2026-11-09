@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
 import { atan2, cos, normalizeAngle, sin } from "shared/sim/dmath";
+import { test } from "vitest";
 
 // bit-exact fingerprint of the functions over many inputs: the same number must
 // come out in every engine (checked in Chrome 156, see README)

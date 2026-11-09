@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
 import { decodeSnapshot, encodeInput } from "shared/codec/binary";
 import * as jsonCodec from "shared/codec/json";
 import { commandInput, NET_CONTROLS, NEUTRAL } from "shared/sim/commands";
 import { applyCommand, DT } from "shared/sim/match";
 import { Ship } from "shared/sim/ship";
 import { describe } from "shared/sim/snapshot";
+import { test } from "vitest";
 import { Match } from "../src/match.ts";
 import { createNetSim } from "../src/netsim.ts";
 import { Room } from "../src/rooms.ts";

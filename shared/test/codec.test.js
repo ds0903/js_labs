@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
 import * as binary from "shared/codec/binary";
 import { getCodec } from "shared/codec/index";
 import * as json from "shared/codec/json";
 import { applyCommand, createMatch, DT } from "shared/sim/match";
 import { snapshotWorld } from "shared/sim/snapshot";
+import { test } from "vitest";
 
 // a busy world: 4 ships, asteroids, pickups, bullets
 function busySnapshot() {
