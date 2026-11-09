@@ -59,7 +59,7 @@ test("join goes first when the socket opens, queued messages after it", () => {
 
   sockets[0].open();
   assert.deepEqual(sockets[0].sent, [
-    { type: "join", v: 1, room: "r1", name: "Ann" },
+    { type: "join", v: 1, room: "r1", name: "Ann", codec: "binary" },
     chat("early 1"),
     chat("early 2"),
   ]);
@@ -89,7 +89,7 @@ test("a dropped connection is reopened and joins again", async () => {
   assert.equal(sockets.length, 2);
   sockets[1].open();
   assert.deepEqual(sockets[1].sent, [
-    { type: "join", v: 1, room: "r1", name: "Ann" },
+    { type: "join", v: 1, room: "r1", name: "Ann", codec: "binary" },
     chat("while offline"),
   ]);
   assert.deepEqual(statuses, ["open", "reconnecting", "open"]);

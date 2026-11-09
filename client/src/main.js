@@ -6,6 +6,7 @@ import { createInput } from "./input.js";
 import { createLoop, STEP } from "./loop.js";
 import { Connection, wsUrl } from "./net/connection.js";
 import { Lobby } from "./net/lobby.js";
+import { startNetGame } from "./net/play.js";
 import { createView } from "./render/canvas.js";
 import { drawScene } from "./render/draw.js";
 import { createStats } from "./stats.js";
@@ -173,16 +174,42 @@ async function boot() {
   const lobby = new Lobby();
   const { name, room } = await showLobby(overlay, lobby);
 
-  // the match itself is still local; the room gives chat and a player list
-  const connection = new Connection({ url: wsUrl(), room: room.id, name });
+  // ?local keeps the lab 2 game: two players on one keyboard, no server match
+  if (params.has("local")) {
+    startGame({
+      config: manifest.arenas[room.arena],
+      sprites: assets.sprites,
+      audio,
+      name,
+    });
+    return;
+  }
+
+  const connection = new Connection({
+    url: wsUrl(),
+    room: room.id,
+    name,
+    codec: params.get("codec") === "json" ? "json" : "binary",
+  });
   createChatView(document.body, connection, { roomName: room.name, selfName: name });
   window.__connection = connection;
 
-  startGame({
-    config: manifest.arenas[room.arena],
-    sprites: assets.sprites,
+  // the match starts when the server has put a ship in the world for us;
+  // a refusal (room full, ...) ends the connection and the chat shows why
+  const welcome = await new Promise((resolve) => {
+    connection.addEventListener("message", ({ detail }) => {
+      if (detail.type === "welcome") resolve(detail);
+    });
+  });
+  startNetGame({
+    connection,
+    welcome,
+    view,
+    hud,
+    scoreboard,
     audio,
-    name,
+    sprites: assets.sprites,
+    params,
   });
 }
 
