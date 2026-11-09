@@ -8,6 +8,7 @@
 - лаба 3: завантаження ресурсів, спрайти й звук, лобі по HTTP (розділ "Лаба 3")
 - лаба 4: сервер на Node без фреймворків: HTTP, WebSocket, потоки, логи, вимкнення (розділ "Лаба 4")
 - лаба 5: авторитетний сервер 30 Гц, передбачення, інтерполяція, бінарний протокол (розділ "Лаба 5")
+- лаба 6: увесь код на TypeScript, протокол описаний один раз (zod), типи замість перевірок (розділ "Лаба 6")
 
 ![лаба 1](docs/screenshot.png)
 
@@ -22,6 +23,7 @@ npm install
 npm run dev:server    # http://127.0.0.1:3000, логи матчів у server/logs
 npm run dev:client    # Vite, проксі /api і /ws на сервер (BACKEND=host:port змінює адресу)
 npm test              # node --test, три пакети
+npm run typecheck     # tsc --noEmit у трьох пакетах
 npm run lint          # Biome
 npm run build         # client/dist
 npm start             # сервер віддає client/dist і API на одному порту
@@ -43,7 +45,8 @@ npm start             # сервер віддає client/dist і API на одн
 З лаби 5 симуляція живе в `shared/src/sim/` (вона переїхала з `client/src/sim/`, назви файлів ті
 самі: vector, entity, entities, behaviors, world, collision, rules, ship, game, arena, random).
 Так що в списку нижче `client/src/sim/...` читати як `shared/src/sim/...`. Нове в лабі 5 описано в
-розділі "Лаба 5" нижче.
+розділі "Лаба 5" нижче. З лаби 6 усі файли в `src/` мають розширення `.ts` (імена ті самі, у списку
+й нижче ще стоїть `.js`); тести лишились `.js`.
 
 ```
 client/index.html
@@ -66,7 +69,7 @@ client/src/assets/loader.js   fetchJson, postJson, loadImage, loadAudio, withRet
 client/src/audio.js           AudioContext, відтворення, підписка на події світу
 client/src/ui/loading.js      екран завантаження на canvas із прогрес-баром
 client/src/ui/lobby-view.js   DOM лобі зі створенням кімнати, ui/hud.js рахунок, ui/chat-view.js чат
-client/src/net/lobby.js       Lobby extends EventTarget: refresh, create, join, leave
+client/src/net/lobby.js       Lobby extends Bus<LobbyEvents>: refresh, create, join, leave
 client/src/net/connection.js  Connection: WebSocket, черга, перепідключення, коди закриття
 client/public/assets/         manifest.json, sprites.png, три .wav (scripts/gen-assets.mjs)
 client/vite.config.js         проксі /api і /ws на сервер, dev-міддлвар /slow/<мс>/...
@@ -366,15 +369,15 @@ Stretch (ECS на типізованих масивах, просторовий 
 лаби 2. `audio.js` володіє `AudioContext`, перший клік або клавіша робить `resume()` (браузер
 тримає контекст призупиненим до жесту).
 
-Симуляція не імпортує ні `audio.js`, ні `hud.js`: `World` це `EventTarget`, він шле
-`CustomEvent` `fired`, `hit`, `exploded`, `pickup`, `score`, `respawned`, а звук і HUD
-підписуються ззовні (`connectAudio`, `connectHud`). Є тест, який читає імпорти у `src/sim/*.js` і
+Симуляція не імпортує ні `audio.js`, ні `hud.js`: `World` шле події `fired`, `hit`, `exploded`,
+`pickup`, `score`, `respawned` (в лабі 3 це був `EventTarget` з `CustomEvent`, з лаби 6 типізована
+шина `Bus`, див. "Лаба 6"), а звук і HUD підписуються ззовні (`connectAudio`, `connectHud`). Є тест, який читає імпорти у `src/sim/*.js` і
 падає, якщо там з'явиться audio, hud, ui чи loader.
 
 ### Лобі по HTTP
 
-`Lobby extends EventTarget` (`refresh()`, `join(roomId, name)`, `leave()`, події `rooms`,
-`error`, `joined`) нічого не знає про DOM, а `lobby-view.js` лише слухає події й малює.
+`Lobby` (спершу `extends EventTarget`, тепер `extends Bus`; `refresh()`, `join(roomId, name)`,
+`leave()`, події `rooms`, `error`, `joined`) нічого не знає про DOM, а `lobby-view.js` лише слухає події й малює.
 Кімнати приходять з `/api/rooms` (у лабі 3 це був dev-міддлвар із файлом `rooms.json`, у лабі 4
 його замінив справжній сервер). Оновлення раз на 3 с, поки лобі видно, кожен запит із таймаутом 2,5 с через
 `AbortSignal.timeout`, запити не накладаються. `leave()` зупиняє таймер і скасовує запит, який
@@ -753,8 +756,8 @@ scripts/timer-jitter.mjs   setInterval проти абсолютної цілі
 втрат (`?lat=100&jitter=30&drop=2`), RTT у netgraph 116-118 мс.
 
 | що                                                     | без передбачення (`P`) | з передбаченням |
-| ------------------------------------------------------ | --------------------- | --------------- |
-| від натискання клавіші до руху свого корабля на екрані | 164-197 мс            | 31 мс           |
+| ------------------------------------------------------ | ---------------------- | --------------- |
+| від натискання клавіші до руху свого корабля на екрані | 164-197 мс             | 31 мс           |
 
 З передбаченням корабель реагує на наступному кадрі, а не після повного кола RTT. Корекції: у
 вільному просторі без втрат 0,00 px; з втратами це стрибки на один крок, коли втрачений вхід
@@ -856,3 +859,84 @@ Chrome 156 і Node 24 різні останні біти (`Math.hypot`, `sqrt`, 
 - Числа з `/api/stats` (тривалість тіку на живому сервері) не записував; є тільки `timer-jitter`,
   окремий скрипт, а не сервер.
 - Публічного розгортання (wss) нема.
+
+## Лаба 6: TypeScript
+
+Увесь код у `shared/src`, `server/src` і `client/src` переписаний на `.ts` (близько 6400 рядків).
+Поведінка та сама: еталонний хеш детермінізму (`GOLDEN_1000_STEPS`) не змінився. Кілька тестів
+довелося переписати, бо змінився інтерфейс, а не поведінка (події, `getCodec`, `checkCommand`).
+
+### Інструменти
+
+- `tsc` 7.0.2 (нативний), лише перевірка (`noEmit`), `npm run typecheck` ганяє три пакети.
+  Базовий `tsconfig.base.json`: `strict`, `noUncheckedIndexedAccess`, `noImplicitOverride`,
+  `noFallthroughCasesInSwitch`, `verbatimModuleSyntax`, `erasableSyntaxOnly`.
+- Збірки для сервера нема: Node 24 сам знімає типи з `.ts`. Тому `erasableSyntaxOnly`: ні `enum`,
+  ні параметрів-властивостей, а імпорти пишуться з `.ts`. Клієнт збирає Vite як і раніше.
+- Тести лишились на звичайному JS (`node --test`), вони імпортують `.ts` напряму. Перевести їх на
+  TypeScript не встиг.
+- CI: `.github/workflows/ci.yml` ганяє `npm ci`, `typecheck`, `lint`, `test`. На GitHub я його
+  ще не бачив зеленим, тільки ті самі команди локально.
+- Підрахунок: `any` у коді нема, `@ts-ignore` нема, твердження типу `as T` нема (лише `as const`).
+  Для цього користуюсь предикатами типу (`n is EntityId`), `z.custom<T>` і невеликим помічником
+  `query()` для DOM.
+
+### Протокол описаний один раз
+
+`shared/src/protocol.ts` це схеми zod, а типи беруться з них (`z.infer`): повідомлення клієнта,
+повідомлення сервера, команда, запис кімнати. Один опис слугує і типом, і перевіркою.
+
+- Сервер перевіряє вхідне схемою (`parseClientText`, `CommandSchema`), клієнт перевіряє вхідне
+  від сервера (`parseServerText`), HTTP-відповіді `/api/rooms` і `manifest.json` теж. Бінарні
+  декодери повертають вже типізовані значення і самі відкидають зламаний кадр.
+- Те, що приходить ззовні, має тип `unknown`, поки його не пройшла схема (`fetchJson` повертає
+  `unknown`, `catch` дає `unknown`).
+- Змінні середовища сервера теж схема (`EnvSchema`), помилки конфігу так само збираються разом.
+- Наслідок для клієнта: раніше `Connection` віддавав у подію будь-який розібраний JSON; тепер
+  JSON не за протоколом відкидається, як і зламаний кадр (тест `incoming messages become events`).
+
+### Три типи, які пояснюю
+
+1. **Брендовані числа** (`shared/src/brand.ts`): `EntityId`, `Tick`, `Seq` це `number` з відміткою
+   (`unique symbol`). Передати `Seq` туди, де чекають `Tick`, або голе `number`, не вийде;
+   отримати значення можна лише через перевірку діапазону (`entityId(n)` кидає `RangeError`).
+   Це ловить плутанину між 16-бітним id в протоколі й повним id сутності у світі (`id16`).
+2. **Дискримінований union** (`SnapshotEntity`, `ServerMessage`, `Drawable` в `render/draw.ts`):
+   поле `kind`/`type`/`name` каже, які ще поля є. `switch` з гілкою `default: assertNever(x)`
+   не збереться, якщо додати новий вид сутності чи подію і не обробити її: так у `play.ts`,
+   `draw.ts` і `ws.ts`.
+3. **Узагальнена шина** `Bus<E>` (`shared/src/bus.ts`): `E` це об'єкт "ім'я події → тип даних".
+   `world.on("hit", ...)` знає, що отримає обробник, а `emit("hit", не те)` не збереться.
+   Замінила `EventTarget` + `CustomEvent`: у `shared` нема DOM-бібліотеки, а `e.detail` ніхто не
+   типізував. Так само `EventEmitter<RoomEvents>` на сервері.
+
+Окремо `Entity<K extends EntityKind>` і захисник `isKind(e, "ship")`: після нього компілятор
+знає, що `e` це корабель, і `e.name` доступний.
+
+### Що знайшов TypeScript
+
+Чесно: багів у грі він не виявив, бо лаба 5 вже мала тести. Реальне:
+
+- `createGame` брав `CONTROLS[i]` без перевірки: третій локальний вхід дав би `undefined` і
+  падіння на першому ж кроці. З `noUncheckedIndexedAccess` це видно; тепер `RangeError` з
+  поясненням.
+- `getCodec("xml")` раніше падало лише під час роботи, тепер назва кодека це `CodecName`, а
+  відповідь на `join` з іншою назвою відкидає схема.
+- Схема `ServerMessage` як `discriminatedUnion` по `type` не зібралась: усі події мають
+  `type: "event"` і відрізняються лише полем `name`. Зробив `z.union` (це помилка в моєму першому
+  описі схеми, а не в грі).
+- Решта знахідок це місця, де компілятор змусив написати перевірку явно (наприклад у `hud.ts`
+  астероїд не має `name`, у `interp.ts` індекс у масиві знімків може бути порожнім), а не
+  справжні баги.
+
+### Про фреймворк
+
+Необов'язкову частину з фреймворком (React/Vue) **не робив**: інтерфейс це canvas, лобі й чат на
+~150 рядків DOM, а стан живе в симуляції, а не в компонентах. Фреймворк тут додав би збірку й
+залежність без вигоди. Рішення: лишаю чистий DOM, типізований через `query(root, селектор, клас)`.
+
+### Що не зроблено (лаба 6)
+
+- Тести не на TypeScript (JS, що імпортує `.ts`), тож самі тести компілятор не перевіряє.
+- Фреймворка нема (див. вище).
+- CI-файл написаний, але на GitHub Actions не запускався: не бачив зеленого значка.
