@@ -6,10 +6,12 @@ import { applyCommand, createMatch, DT, TICK_RATE } from "shared/sim/match";
 import type { Ship } from "shared/sim/ship";
 import { snapshotWorld } from "shared/sim/snapshot";
 import type { World } from "shared/sim/world";
+import { Bot } from "./bot.ts";
 import type { Room } from "./rooms.ts";
 import type { Player } from "./types.ts";
 
 export const INTERVAL_MS = 1000 / TICK_RATE;
+const HISTORY = 20_000; // about 11 minutes of ticks
 
 // one connected player's state inside the match
 interface Entry {
@@ -32,6 +34,8 @@ export interface MatchOptions {
 export class Match {
   tick: Tick = tick(0);
   readonly players = new Map<string, Entry>();
+  // AI players; they are in `players` too, this is only the list to ask for input
+  readonly bots = new Map<string, Bot>();
   readonly room: Room;
   readonly world: World;
   readonly maxInputQueue: number;
@@ -41,7 +45,11 @@ export class Match {
   #next = 0;
   #lastStart = 0;
   #index = 0;
+  #botCount = 0;
   #durations: number[] = []; // last second of tick durations, ms
+  // every tick of the match (the newest HISTORY of them), for percentiles over a whole run
+  #history = new Float64Array(HISTORY);
+  #historyCount = 0;
   #jitters: number[] = []; // |actual interval - 33.3|, ms
   overruns = 0;
   starved = 0;
@@ -122,7 +130,22 @@ export class Match {
     if (!entry) return;
     entry.ship.kill();
     this.players.delete(id);
+    this.bots.delete(id);
     if (this.players.size === 0) this.stop();
+  }
+
+  // Puts an AI player into the room. It joins like anybody else (roster, ship,
+  // snapshots) and returns null when the room is full.
+  addBot(): Bot | null {
+    const bot = new Bot(`Bot ${++this.#botCount}`);
+    if (!this.room.join(bot)) return null;
+    this.bots.set(bot.id, bot);
+    return bot;
+  }
+
+  // a room with only bots in it would run forever for nobody
+  #dropBots(): void {
+    for (const id of [...this.bots.keys()]) this.room.leave(id);
   }
 
   // An input from the network. Returns false when it was not accepted.
@@ -157,9 +180,11 @@ export class Match {
     this.#lastStart = started;
 
     this.runTick();
+    if (this.#timer === null) return; // the match ended during the tick
 
     const ended = this.now();
     this.#push(this.#durations, ended - started);
+    this.#history[this.#historyCount++ % HISTORY] = ended - started;
     this.#next += INTERVAL_MS;
     let wait = this.#next - ended;
     if (wait < 0) {
@@ -179,6 +204,11 @@ export class Match {
 
   // one step of the world; public so tests can drive it without timers
   runTick(): void {
+    if (this.bots.size > 0) {
+      // bots send their input the way a client does, before the tick consumes it
+      if (this.room.players.size === this.bots.size) this.#dropBots();
+      else for (const bot of this.bots.values()) bot.think(this);
+    }
     for (const entry of this.players.values()) this.#consume(entry);
     this.world.step(DT);
     this.tick = tick(this.tick + 1);
@@ -232,6 +262,14 @@ export class Match {
     }
   }
 
+  #historyStats() {
+    const count = Math.min(this.#historyCount, HISTORY);
+    const sorted = Array.from(this.#history.subarray(0, count)).sort((a, b) => a - b);
+    const at = (q: number) =>
+      Math.round((sorted[Math.floor((count - 1) * q)] ?? 0) * 100) / 100;
+    return { count, p50: at(0.5), p95: at(0.95), p99: at(0.99), max: at(1) };
+  }
+
   stats() {
     const sorted = [...this.#durations].sort((a, b) => a - b);
     const avg = (list: number[]) =>
@@ -240,6 +278,7 @@ export class Match {
     return {
       tick: this.tick,
       players: this.players.size,
+      bots: this.bots.size,
       entities: this.world.size,
       tickMs: {
         avg: round(avg(this.#durations)),
@@ -250,6 +289,8 @@ export class Match {
         avg: round(avg(this.#jitters)),
         max: round(Math.max(0, ...this.#jitters)),
       },
+      // over the whole life of the match, not only the last second
+      tickHistoryMs: this.#historyStats(),
       overruns: this.overruns,
       starvedTicks: this.starved,
       catchUpSteps: this.catchUps,

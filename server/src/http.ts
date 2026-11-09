@@ -9,6 +9,7 @@ import { LimitError, type RoomManager } from "./rooms.ts";
 import { serveStatic } from "./static.ts";
 
 const ARENA_NAMES = Object.keys(ARENAS);
+let lastElu = performance.eventLoopUtilization();
 
 export class HttpError extends Error {
   readonly status: number;
@@ -80,6 +81,25 @@ function parseNewRoom(text: string): { name: string; arena: string } {
 
 const REPLAY_NAME = /^[A-Za-z0-9_.-]+\.ndjson$/;
 
+// an empty body means one bot
+function parseBotCount(text: string): number {
+  if (text.trim() === "") return 1;
+  let body: unknown;
+  try {
+    body = JSON.parse(text);
+  } catch {
+    throw new HttpError(400, "body is not JSON");
+  }
+  if (body === null || typeof body !== "object" || Array.isArray(body)) {
+    throw new HttpError(400, "body must be an object");
+  }
+  const count = "count" in body ? body.count : 1;
+  if (typeof count !== "number" || !Number.isInteger(count) || count < 1 || count > 8) {
+    throw new HttpError(400, "count must be a whole number from 1 to 8");
+  }
+  return count;
+}
+
 export interface HandlerDeps {
   config: ServerConfig;
   rooms: RoomManager;
@@ -104,9 +124,16 @@ export function createHandler({ config, rooms, stats, connections }: HandlerDeps
     }
 
     if (pathname === "/api/stats" && method === "GET") {
+      // share of time the event loop was busy since the previous call
+      const now = performance.eventLoopUtilization();
+      const elu = performance.eventLoopUtilization(now, lastElu).utilization;
+      lastElu = now;
+      const memory = process.memoryUsage();
       return sendJson(res, 200, {
         uptimeSec: Math.round(process.uptime()),
-        rss: process.memoryUsage().rss,
+        rss: memory.rss,
+        heapUsed: memory.heapUsed,
+        elu: Math.round(elu * 1000) / 1000,
         connections: connections(),
         rooms: rooms.stats(),
       });
@@ -131,6 +158,22 @@ export function createHandler({ config, rooms, stats, connections }: HandlerDeps
         }
       }
       throw new HttpError(405, "method not allowed");
+    }
+
+    // POST /api/rooms/:id/bots  { count?: 1-8 }  puts AI players into a room
+    const botsRoute = /^\/api\/rooms\/([A-Za-z0-9_-]{1,40})\/bots$/.exec(pathname);
+    if (botsRoute) {
+      if (method !== "POST") throw new HttpError(405, "method not allowed");
+      const room = rooms.get(botsRoute[1] ?? "");
+      if (!room?.match) throw new HttpError(404, "no such room");
+      const count = parseBotCount(await readBody(req, config.maxBodyBytes));
+      let added = 0;
+      while (added < count && room.match.addBot()) added++;
+      return sendJson(res, added > 0 ? 201 : 409, {
+        added,
+        players: room.size,
+        ...(added < count && { error: "room is full" }),
+      });
     }
 
     // match logs: list, and download one as a stream
