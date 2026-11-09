@@ -13,6 +13,7 @@ import type { Audio } from "../audio.ts";
 import { isTypingTarget } from "../dom.ts";
 import { createInput } from "../input.ts";
 import { createLoop } from "../loop.ts";
+import { timed } from "../perf.ts";
 import type { View } from "../render/canvas.ts";
 import { type Drawable, drawableOf, drawScene, type Sprites } from "../render/draw.ts";
 import type { Connection } from "./connection.ts";
@@ -134,7 +135,7 @@ export function startNetGame({
     const me = snap.entities.find(
       (e): e is ShipRecord => isShipRecord(e) && e.id === predictor.netId,
     );
-    const magnitude = predictor.reconcile(me, snap.ack);
+    const magnitude = timed("reconcile", () => predictor.reconcile(me, snap.ack));
     if (predict && me) stats.onCorrection(magnitude);
     predictor.pruneBullets(snap.entities, snap.ack);
   });
@@ -184,7 +185,9 @@ export function startNetGame({
   };
 
   function simulate(): void {
-    const cmd = predictor.step(keys(), tick(interp.latestTick), { predict });
+    const cmd = timed("simulate", () =>
+      predictor.step(keys(), tick(interp.latestTick), { predict }),
+    );
     connection.sendInput(cmd);
     input.endStep();
   }
@@ -287,7 +290,7 @@ export function startNetGame({
 
   function render(alpha: number): void {
     const now = performance.now();
-    drawScene(view, buildScene(now), alpha, now, sprites);
+    timed("render", () => drawScene(view, buildScene(now), alpha, now, sprites));
 
     if (now - lastHud > 100) {
       lastHud = now;

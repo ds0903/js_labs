@@ -5,3 +5,6 @@ dist
 .vscode
 .env
 server/logs
+coverage
+test-results
+playwright-report

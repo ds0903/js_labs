@@ -9,6 +9,7 @@ import {
   type ServerMessage,
   type Snapshot,
 } from "shared/protocol";
+import { timed } from "../perf.ts";
 
 // Close codes where a new attempt is pointless: the server said "no" for
 // a reason that will not go away by itself (see CLOSE in shared/protocol.ts).
@@ -140,7 +141,7 @@ export class Connection extends Bus<ConnectionEvents> {
       if (data instanceof ArrayBuffer) {
         // a binary frame is always a snapshot
         this.bytesIn += data.byteLength;
-        const snap = this.codec.decodeSnapshot(data);
+        const snap = timed("decode", () => this.codec.decodeSnapshot(data));
         this.emit("snapshot", { snap, size: data.byteLength, at });
         return;
       }
