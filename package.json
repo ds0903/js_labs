@@ -18,6 +18,9 @@
     "format": "biome check --write ."
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.6.6"
+    "@biomejs/biome": "^2.6.6",
+    "@types/node": "^26.6.6",
+    "@types/ws": "^8.18.2",
+    "typescript": "^7.0.2"
   }
 }

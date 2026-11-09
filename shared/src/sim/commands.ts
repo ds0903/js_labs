@@ -1,10 +1,15 @@
+import { seq, tick } from "../brand.ts";
+import type { Command } from "../protocol.ts";
+
 // What a player sends every simulation step: inputs, never positions.
 //   { seq, tick, thrust, turn, fire }
 // seq counts the player's inputs, tick is the newest server tick the client
-// has seen, turn is -1, 0 or 1.
-export const NEUTRAL = Object.freeze({
-  seq: 0,
-  tick: 0,
+// has seen, turn is -1, 0 or 1. The shape is `Command` in protocol.ts, where
+// the zod schema checks it at runtime: that replaces the old hand-written
+// checkCommand.
+export const NEUTRAL: Command = Object.freeze({
+  seq: seq(0),
+  tick: tick(0),
   thrust: false,
   turn: 0,
   fire: false,
@@ -18,10 +23,16 @@ export const NET_CONTROLS = {
   right: "right",
   thrust: "thrust",
   fire: "fire",
-};
+} as const;
 
-export function commandInput() {
-  const input = {
+export interface CommandInput {
+  cmd: Command;
+  readonly seq: number;
+  isDown(code: string): boolean;
+}
+
+export function commandInput(): CommandInput {
+  const input: CommandInput = {
     cmd: NEUTRAL,
     get seq() {
       return input.cmd.seq;
@@ -36,17 +47,4 @@ export function commandInput() {
     },
   };
   return input;
-}
-
-// Never trust the client: a turn of 1000 would be a cheat. Returns an error
-// string or null. Works for anything that came out of a codec.
-export function checkCommand(cmd) {
-  if (cmd === null || typeof cmd !== "object") return "not an object";
-  const uint = (v) => Number.isInteger(v) && v >= 0 && v <= 0xffffffff;
-  if (!uint(cmd.seq)) return "bad seq";
-  if (!uint(cmd.tick)) return "bad tick";
-  if (typeof cmd.thrust !== "boolean") return "bad thrust";
-  if (typeof cmd.fire !== "boolean") return "bad fire";
-  if (cmd.turn !== -1 && cmd.turn !== 0 && cmd.turn !== 1) return "bad turn";
-  return null;
 }

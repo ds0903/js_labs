@@ -1,13 +1,54 @@
-import { ARENA, wrap } from "./arena.js";
-import { Vector2 } from "./vector.js";
+import { ARENA, wrap } from "./arena.ts";
+import type { PickupEffect } from "./effects.ts";
+import { Vector2 } from "./vector.ts";
+import type { World } from "./world.ts";
+
+export type EntityKind = "ship" | "bullet" | "asteroid" | "particle" | "pickup";
+export type EdgeMode = "wrap" | "bounce" | "none";
+
+// Features that are added to an entity by composition (see behaviors.ts and
+// the pickup factory), not by a subclass.
+export interface Parts {
+  homing?: boolean;
+  pickup?: { effect: PickupEffect; seconds: number };
+}
+
+// runs every step before the movement
+export type Behavior = (self: Entity, dt: number) => void;
+
+export interface EntityInit<K extends EntityKind> {
+  id?: number;
+  kind: K;
+  pos?: Vector2;
+  vel?: Vector2;
+  angle?: number;
+  radius?: number;
+  edge?: EdgeMode;
+  solid?: boolean;
+}
 
 // Base class for everything that lives in the world. The class tree stops
 // here: Ship, Bullet, Asteroid and Particle extend Entity, nothing extends
-// them. Extra features (homing, pickups) are added by composition through
-// `behaviors` (functions run every step) and `parts` (plain data).
-export class Entity {
+// them. `K` is the kind as a literal type, so `Entity<"ship">` is a ship and
+// the compiler can tell the kinds apart.
+export class Entity<K extends EntityKind = EntityKind> {
   static #nextId = 1;
-  #id;
+  #id: number;
+
+  readonly kind: K;
+  pos: Vector2;
+  vel: Vector2;
+  angle: number;
+  radius: number;
+  edge: EdgeMode;
+  solid: boolean;
+  alive = true;
+  world: World | null = null;
+  behaviors: Behavior[] = [];
+  parts: Parts = {};
+  // state before the last step, used for interpolation when drawing
+  prevPos: Vector2;
+  prevAngle: number;
 
   // `id` is only passed when the id is decided elsewhere (the server's id on
   // the client side); otherwise the entity takes the next free one
@@ -18,9 +59,9 @@ export class Entity {
     vel = new Vector2(),
     angle = 0,
     radius = 10,
-    edge = "wrap", // "wrap" | "bounce" | "none"
+    edge = "wrap",
     solid = true,
-  }) {
+  }: EntityInit<K>) {
     this.#id = id ?? Entity.#nextId++;
     this.kind = kind;
     this.pos = pos;
@@ -29,35 +70,30 @@ export class Entity {
     this.radius = radius;
     this.edge = edge;
     this.solid = solid;
-    this.alive = true;
-    this.world = null;
-    this.behaviors = [];
-    this.parts = {};
-    // state before the last step, used for interpolation when drawing
     this.prevPos = pos;
     this.prevAngle = angle;
   }
 
-  get id() {
+  get id(): number {
     return this.#id;
   }
 
-  snapshot() {
+  snapshot(): void {
     this.prevPos = this.pos;
     this.prevAngle = this.angle;
   }
 
-  kill() {
+  kill(): void {
     this.alive = false;
   }
 
-  update(dt) {
+  update(dt: number): void {
     for (const behavior of this.behaviors) behavior(this, dt);
     this.pos = this.pos.add(this.vel.scale(dt));
     this.#handleEdges();
   }
 
-  #handleEdges() {
+  #handleEdges(): void {
     if (this.edge === "none") return;
     const { width, height } = this.world?.arena ?? ARENA;
     let { x, y } = this.pos;

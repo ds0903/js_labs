@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
 import { test } from "node:test";
-import { checkCommand, NEUTRAL } from "shared/sim/commands";
+import { CommandSchema } from "shared/protocol";
+import { NEUTRAL } from "shared/sim/commands";
 import { applyCommand, createMatch, DT } from "shared/sim/match";
 import { runScripted, stateHash } from "shared/sim/replay";
 import { describe, id16, normalizeAngle, snapshotWorld } from "shared/sim/snapshot";
@@ -16,7 +17,7 @@ test("the shared simulation imports in Node and touches no DOM or Node API", () 
   const dir = new URL("../src/", import.meta.url);
   const files = [];
   for (const entry of readdirSync(dir, { recursive: true })) {
-    if (entry.endsWith(".js")) files.push(entry);
+    if (entry.endsWith(".ts")) files.push(entry);
   }
   assert.ok(files.length > 10);
   for (const file of files) {
@@ -120,7 +121,8 @@ test("an idle ship does not move, which keeps client replay exact", () => {
   assert.deepEqual({ x: ship.pos.x, y: ship.pos.y }, { x, y });
 });
 
-test("checkCommand rejects anything a legitimate client cannot send", () => {
+test("CommandSchema rejects anything a legitimate client cannot send", () => {
+  const checkCommand = (cmd) => (CommandSchema.safeParse(cmd).success ? null : "bad");
   assert.equal(checkCommand({ ...NEUTRAL, seq: 1 }), null);
   for (const bad of [
     null,

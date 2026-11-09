@@ -16,14 +16,14 @@ const PI = Math.PI;
 const HALF_PI = 1.5707963267948966;
 
 // reduce x to r in [-pi/4, pi/4] and the quadrant n (0..3), x = n*pi/2 + r
-function reduce(x) {
+function reduce(x: number): [number, number] {
   const k = Math.round(x / HALF_PI);
   const r = x - k * PIO2_HI - k * PIO2_LO - k * PIO2_LO2;
   return [r, ((k % 4) + 4) % 4];
 }
 
 // Taylor series, 9 terms are far below 1e-16 on [-pi/4, pi/4]
-function sinPoly(r) {
+function sinPoly(r: number): number {
   const r2 = r * r;
   return (
     r *
@@ -42,7 +42,7 @@ function sinPoly(r) {
   );
 }
 
-function cosPoly(r) {
+function cosPoly(r: number): number {
   const r2 = r * r;
   return (
     1 +
@@ -59,7 +59,7 @@ function cosPoly(r) {
   );
 }
 
-export function sin(x) {
+export function sin(x: number): number {
   const [r, n] = reduce(x);
   if (n === 0) return sinPoly(r);
   if (n === 1) return cosPoly(r);
@@ -67,7 +67,7 @@ export function sin(x) {
   return -cosPoly(r);
 }
 
-export function cos(x) {
+export function cos(x: number): number {
   const [r, n] = reduce(x);
   if (n === 0) return cosPoly(r);
   if (n === 1) return -sinPoly(r);
@@ -77,7 +77,7 @@ export function cos(x) {
 
 // atan for any t: halve the angle twice with t / (1 + sqrt(1 + t^2)) until
 // |t| is small, then a Taylor series
-function atan(t) {
+function atan(t: number): number {
   const negative = t < 0;
   let a = negative ? -t : t;
   let inverted = false;
@@ -106,7 +106,7 @@ function atan(t) {
   return negative ? -result : result;
 }
 
-export function atan2(y, x) {
+export function atan2(y: number, x: number): number {
   if (x === 0 && y === 0) return 0;
   if (x > 0) return atan(y / x);
   if (x < 0) return y >= 0 ? atan(y / x) + PI : atan(y / x) - PI;
@@ -114,4 +114,4 @@ export function atan2(y, x) {
 }
 
 // any angle into (-pi, pi]
-export const normalizeAngle = (angle) => atan2(sin(angle), cos(angle));
+export const normalizeAngle = (angle: number): number => atan2(sin(angle), cos(angle));

@@ -1,30 +1,67 @@
-import { ARENA } from "./arena.js";
-import { findCollisions } from "./collision.js";
-import { mulberry32 } from "./random.js";
-import { resolve } from "./rules.js";
-import { Vector2 } from "./vector.js";
+import { Bus } from "../bus.ts";
+import { ARENA, type Arena } from "./arena.ts";
+import { findCollisions } from "./collision.ts";
+import type { PickupEffect } from "./effects.ts";
+import type { Asteroid, Bullet, Particle } from "./entities.ts";
+import type { Entity, EntityKind } from "./entity.ts";
+import { mulberry32 } from "./random.ts";
+import { resolve } from "./rules.ts";
+import type { Ship } from "./ship.ts";
+import { Vector2 } from "./vector.ts";
+
+// which class each kind of entity is: lets `ofKind("ship")` return ships
+export interface EntityTypes {
+  ship: Ship;
+  bullet: Bullet;
+  asteroid: Asteroid;
+  particle: Particle;
+  pickup: Entity<"pickup">;
+}
+
+// The events of the world and what each one carries. Sound, HUD and the server
+// subscribe from the outside, the simulation does not know about them.
+export interface WorldEvents {
+  fired: { ship: Ship; bullet: Bullet };
+  hit: { target: Ship | Asteroid; bullet: Bullet | null };
+  exploded: { entity: Ship | Asteroid };
+  pickup: { ship: Ship; effect: PickupEffect };
+  score: { ship: Ship; points: number };
+  respawned: { ship: Ship };
+}
+
+// a type guard: after `isKind(e, "ship")` the compiler knows `e` is a Ship
+export function isKind<K extends EntityKind>(e: Entity, kind: K): e is EntityTypes[K] {
+  return e.kind === kind;
+}
+
+export interface WorldOptions {
+  arena?: Arena;
+  seed?: number;
+}
 
 // Owns all entities in a Map<id, Entity>. Despawn only marks an entity as
 // dead, the real removal happens in sweep() at the end of the step, so
 // nothing disappears while the step is still iterating over it.
-export class World extends EventTarget {
-  #entities = new Map();
-  #spawnQueue = [];
-  #timers = [];
+export class World extends Bus<WorldEvents> {
+  #entities = new Map<number, Entity>();
+  #spawnQueue: Entity[] = [];
+  #timers: { at: number; fn: () => void }[] = [];
   #stepping = false;
+  readonly arena: Arena;
+  readonly rng: () => number;
+  time = 0;
 
-  constructor({ arena = ARENA, seed = 1 } = {}) {
+  constructor({ arena = ARENA, seed = 1 }: WorldOptions = {}) {
     super();
     this.arena = arena;
     this.rng = mulberry32(seed);
-    this.time = 0;
   }
 
-  get size() {
+  get size(): number {
     return this.#entities.size;
   }
 
-  spawn(entity) {
+  spawn<T extends Entity>(entity: T): T {
     entity.world = this;
     // during a step new entities wait in a queue, so the Map is not
     // changed while it is being iterated
@@ -33,34 +70,30 @@ export class World extends EventTarget {
     return entity;
   }
 
-  despawn(id) {
+  despawn(id: number): void {
     this.#entities.get(id)?.kill();
   }
 
-  get(id) {
+  get(id: number): Entity | undefined {
     return this.#entities.get(id);
   }
 
-  *[Symbol.iterator]() {
+  *[Symbol.iterator](): Generator<Entity> {
     yield* this.#entities.values();
   }
 
-  *ofKind(kind) {
+  *ofKind<K extends EntityKind>(kind: K): Generator<EntityTypes[K]> {
     for (const entity of this) {
-      if (entity.kind === kind) yield entity;
+      if (isKind(entity, kind)) yield entity;
     }
   }
 
   // runs fn after `delay` seconds of simulated time
-  schedule(delay, fn) {
+  schedule(delay: number, fn: () => void): void {
     this.#timers.push({ at: this.time + delay, fn });
   }
 
-  emit(type, detail) {
-    this.dispatchEvent(new CustomEvent(type, { detail }));
-  }
-
-  randomSpot(clear = 120) {
+  randomSpot(clear = 120): Vector2 {
     const { width, height } = this.arena;
     let spot = new Vector2(this.rng() * width, this.rng() * height);
     for (let i = 0; i < 30; i++) {
@@ -77,7 +110,7 @@ export class World extends EventTarget {
     return spot;
   }
 
-  step(dt) {
+  step(dt: number): void {
     this.#stepping = true;
     this.time += dt;
 
@@ -100,13 +133,13 @@ export class World extends EventTarget {
     }
   }
 
-  #runTimers() {
+  #runTimers(): void {
     const due = this.#timers.filter((t) => t.at <= this.time);
     this.#timers = this.#timers.filter((t) => t.at > this.time);
     for (const timer of due) timer.fn();
   }
 
-  #sweep() {
+  #sweep(): void {
     for (const [id, entity] of this.#entities) {
       if (entity.alive) continue;
       this.#entities.delete(id);

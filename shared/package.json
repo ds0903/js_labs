@@ -1,11 +1,16 @@
 {
   "name": "shared",
   "private": true,
-  "version": "0.5.0",
+  "version": "0.6.0",
   "type": "module",
   "exports": {
-    "./sim/*": "./src/sim/*.js",
-    "./codec/*": "./src/codec/*.js",
-    "./protocol": "./src/protocol.js"
+    "./bus": "./src/bus.ts",
+    "./brand": "./src/brand.ts",
+    "./sim/*": "./src/sim/*.ts",
+    "./codec/*": "./src/codec/*.ts",
+    "./protocol": "./src/protocol.ts"
+  },
+  "dependencies": {
+    "zod": "^4.6.7"
   }
 }

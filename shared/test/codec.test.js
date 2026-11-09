@@ -177,10 +177,36 @@ test("a Buffer with an offset (as ws delivers it) decodes the same", () => {
   assert.deepEqual(binary.decodeInput(padded.subarray(5, 17)), cmd);
 });
 
-test("getCodec finds both codecs and refuses unknown ones", () => {
+test("getCodec finds both codecs, and each refuses the other's frames", () => {
   assert.equal(getCodec("binary").binary, true);
   assert.equal(getCodec("json").binary, false);
-  assert.throws(() => getCodec("xml"));
+  // an unknown codec name never gets this far: the join schema rejects it
+  const cmd = { seq: 1, tick: 2, thrust: true, turn: 0, fire: false };
+  for (const codec of [getCodec("binary"), getCodec("json")]) {
+    assert.deepEqual(codec.decodeInput(codec.encodeInput(cmd)), cmd);
+  }
+  assert.throws(() => getCodec("binary").decodeInput("text"), binary.CodecError);
+  assert.throws(() => getCodec("json").decodeInput(new ArrayBuffer(12)));
+});
+
+test("decoders check ranges, not only lengths", () => {
+  const input = new Uint8Array(
+    binary.encodeInput({ seq: 1, tick: 0, thrust: false, turn: 0, fire: false }),
+  );
+  input[11] = 2; // turn must be -1, 0 or 1
+  assert.throws(() => binary.decodeInput(input), /bad turn/);
+
+  const snap = new Uint8Array(binary.encodeSnapshot(busySnapshot()));
+  assert.throws(() => binary.decodeSnapshot(snap.slice(0, snap.length - 1)), /truncated/);
+  const longer = new Uint8Array(snap.length + 1);
+  longer.set(snap);
+  assert.throws(() => binary.decodeSnapshot(longer), /trailing/);
+
+  // JSON: the schema is the validator, a missing or foreign field throws
+  assert.throws(() => json.decodeInput('{"type":"input","seq":1}'));
+  assert.throws(() =>
+    json.decodeInput('{"type":"input","seq":1,"tick":0,"thrust":false,"turn":5,"fire":false}'),
+  );
 });
 
 test("typed array versus DataView: the same bytes read two ways", () => {

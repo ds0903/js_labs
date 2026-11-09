@@ -1,12 +1,15 @@
-import { explode, spawnAsteroid } from "./entities.js";
-import { SHIP } from "./ship.js";
+import { type Asteroid, type Bullet, explode, spawnAsteroid } from "./entities.ts";
+import type { Entity, EntityKind } from "./entity.ts";
+import { SHIP, type Ship } from "./ship.ts";
+import { type EntityTypes, isKind, type World } from "./world.ts";
 
 const SCORE = { ship: 10, asteroid: 2 };
 
 // What happens when two entities touch. The collision system only finds
 // the pairs, the decisions live here.
-export function resolve(a, b, world) {
-  const pick = (kind) => (a.kind === kind ? a : b.kind === kind ? b : null);
+export function resolve(a: Entity, b: Entity, world: World): void {
+  const pick = <K extends EntityKind>(kind: K): EntityTypes[K] | null =>
+    isKind(a, kind) ? a : isKind(b, kind) ? b : null;
   const bullet = pick("bullet");
   const ship = pick("ship");
   const asteroid = pick("asteroid");
@@ -18,7 +21,7 @@ export function resolve(a, b, world) {
   else if (ship && pickup) collect(pickup, ship, world);
 }
 
-function bulletHitsShip(bullet, ship, world) {
+function bulletHitsShip(bullet: Bullet, ship: Ship, world: World): void {
   if (bullet.owner === ship) return;
   bullet.kill();
   const damaged = ship.takeDamage(bullet.damage);
@@ -26,7 +29,7 @@ function bulletHitsShip(bullet, ship, world) {
   if (damaged && ship.hp === 0) destroyShip(world, ship, bullet.owner);
 }
 
-function bulletHitsAsteroid(bullet, asteroid, world) {
+function bulletHitsAsteroid(bullet: Bullet, asteroid: Asteroid, world: World): void {
   bullet.kill();
   asteroid.hp -= bullet.damage;
   world.emit("hit", { target: asteroid, bullet });
@@ -41,7 +44,7 @@ function bulletHitsAsteroid(bullet, asteroid, world) {
   world.schedule(5, () => spawnAsteroid(world, { hunter }));
 }
 
-function asteroidHitsShip(asteroid, ship, world) {
+function asteroidHitsShip(asteroid: Asteroid, ship: Ship, world: World): void {
   if (!ship.takeDamage(15, 0.6)) return;
   const push = ship.pos.sub(asteroid.pos).normalize().scale(150);
   ship.vel = ship.vel.add(push);
@@ -49,19 +52,22 @@ function asteroidHitsShip(asteroid, ship, world) {
   if (ship.hp === 0) destroyShip(world, ship, null);
 }
 
-function collect(pickup, ship, world) {
-  const { effect, seconds } = pickup.parts.pickup;
-  ship.applyEffect(effect, seconds);
+function collect(pickup: Entity<"pickup">, ship: Ship, world: World): void {
+  // `parts` is a bag of optional data, so the compiler makes us say what
+  // happens to a pickup that has none (it cannot happen: the factory sets it)
+  const data = pickup.parts.pickup;
+  if (!data) return;
+  ship.applyEffect(data.effect, data.seconds);
   pickup.kill();
-  world.emit("pickup", { ship, effect });
+  world.emit("pickup", { ship, effect: data.effect });
 }
 
-function award(world, ship, points) {
+function award(world: World, ship: Ship, points: number): void {
   ship.score += points;
   world.emit("score", { ship, points });
 }
 
-function destroyShip(world, ship, killer) {
+function destroyShip(world: World, ship: Ship, killer: Ship | null): void {
   ship.kill();
   if (killer && killer !== ship) award(world, killer, SCORE.ship);
   explode(world, ship.pos, ship.color, 36);

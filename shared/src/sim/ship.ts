@@ -1,7 +1,9 @@
-import { withHoming } from "./behaviors.js";
-import { Bullet } from "./entities.js";
-import { Entity } from "./entity.js";
-import { Vector2 } from "./vector.js";
+import type { ShipRecord } from "../protocol.ts";
+import { withHoming } from "./behaviors.ts";
+import { PICKUP_EFFECTS, type PickupEffect } from "./effects.ts";
+import { Bullet } from "./entities.ts";
+import { Entity } from "./entity.ts";
+import { Vector2 } from "./vector.ts";
 
 export const SHIP = {
   turnSpeed: 3.5, // rad/s
@@ -15,15 +17,53 @@ export const SHIP = {
   spawnGrace: 2, // s without damage after respawn
 };
 
-export const CONTROLS = [
+// which key code (or command name) does what
+export interface Controls {
+  left: string;
+  right: string;
+  thrust: string;
+  fire: string;
+}
+
+export const CONTROLS: readonly Controls[] = [
   { left: "ArrowLeft", right: "ArrowRight", thrust: "ArrowUp", fire: "Space" },
   { left: "KeyA", right: "KeyD", thrust: "KeyW", fire: "KeyF" },
 ];
 
-export class Ship extends Entity {
-  #hp = SHIP.maxHp;
+// A ship only needs to ask "is this pressed?", so a test can pass a fake one.
+// `seq` is there when the input comes from the network.
+export interface InputSource {
+  isDown(code: string): boolean;
+  readonly seq?: number;
+}
 
-  // input only needs isDown(code), so a test can pass a fake one
+export type Effects = Record<PickupEffect, number>;
+
+export interface ShipInit {
+  id?: number;
+  input: InputSource;
+  controls: Controls;
+  name?: string;
+  color?: string;
+  sprite?: string;
+}
+
+export class Ship extends Entity<"ship"> {
+  #hp: number = SHIP.maxHp;
+  input: InputSource;
+  controls: Controls;
+  name: string;
+  color: string;
+  sprite: string;
+  score = 0;
+  thrusting = false;
+  cooldown = 0;
+  grace = 0;
+  effects: Effects = { shield: 0, rapid: 0, homing: 0 };
+  // the server sets it when a player's input did not arrive for this tick:
+  // the ship does not move, so the client can replay exactly what was acked
+  idle = false;
+
   constructor({
     id,
     input,
@@ -31,28 +71,20 @@ export class Ship extends Entity {
     name = "ship",
     color = "#cfe3ff",
     sprite = "ship1",
-  }) {
+  }: ShipInit) {
     super({ id, kind: "ship", radius: 14, angle: -Math.PI / 2 });
     this.input = input;
     this.controls = controls;
     this.name = name;
     this.color = color;
     this.sprite = sprite;
-    this.score = 0;
-    this.thrusting = false;
-    this.cooldown = 0;
-    this.grace = 0;
-    this.effects = { shield: 0, rapid: 0, homing: 0 };
-    // the server sets it when a player's input did not arrive for this tick:
-    // the ship does not move, so the client can replay exactly what was acked
-    this.idle = false;
   }
 
-  get hp() {
+  get hp(): number {
     return this.#hp;
   }
 
-  update(dt) {
+  override update(dt: number): void {
     if (this.idle) return;
     const { left, right, thrust } = this.controls;
     const turn = (this.input.isDown(right) ? 1 : 0) - (this.input.isDown(left) ? 1 : 0);
@@ -70,14 +102,14 @@ export class Ship extends Entity {
 
     this.cooldown = Math.max(0, this.cooldown - dt);
     this.grace = Math.max(0, this.grace - dt);
-    for (const name of Object.keys(this.effects)) {
+    for (const name of PICKUP_EFFECTS) {
       this.effects[name] = Math.max(0, this.effects[name] - dt);
     }
   }
 
   // Uses `this`, so it only works when called as ship.fire(). Passing the
   // bare method to an event listener loses `this`, see README.
-  fire() {
+  fire(): void {
     if (this.cooldown > 0 || this.world === null) return;
 
     const dir = Vector2.fromAngle(this.angle);
@@ -86,7 +118,6 @@ export class Ship extends Entity {
       vel: this.vel.add(dir.scale(SHIP.bulletSpeed)),
       owner: this,
     });
-    // which input fired it, so the client can match its own predicted bullet
     bullet.srcSeq = this.input.seq ?? 0;
     if (this.effects.homing > 0) {
       withHoming(bullet, {
@@ -101,20 +132,20 @@ export class Ship extends Entity {
   }
 
   // returns true if the damage was applied
-  takeDamage(amount, grace = 0) {
+  takeDamage(amount: number, grace = 0): boolean {
     if (this.effects.shield > 0 || this.grace > 0) return false;
     this.#hp = Math.max(0, this.#hp - amount);
     this.grace = grace;
     return true;
   }
 
-  applyEffect(name, seconds) {
+  applyEffect(name: PickupEffect, seconds: number): void {
     this.effects[name] = seconds;
   }
 
-  // Takes the state described by a snapshot (see snapshot.js). Used by the
+  // Takes the state described by a snapshot (see snapshot.ts). Used by the
   // client to put its predicted ship where the server says it is.
-  restore(s) {
+  restore(s: ShipRecord): void {
     this.#hp = s.hp;
     this.alive = true;
     this.pos = new Vector2(s.x, s.y);
@@ -128,7 +159,7 @@ export class Ship extends Entity {
     this.score = s.score;
   }
 
-  reset(pos) {
+  reset(pos: Vector2): void {
     this.#hp = SHIP.maxHp;
     this.alive = true;
     this.pos = pos;
