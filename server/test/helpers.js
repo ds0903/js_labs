@@ -2,8 +2,8 @@ import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import WebSocket from "ws";
-import { loadConfig } from "../src/config.js";
-import { createApp } from "../src/index.js";
+import { loadConfig } from "../src/config.ts";
+import { createApp } from "../src/index.ts";
 
 export const silent = { info() {}, warn() {}, error() {} };
 

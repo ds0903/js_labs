@@ -6,9 +6,9 @@ import { commandInput, NET_CONTROLS, NEUTRAL } from "shared/sim/commands";
 import { applyCommand, DT } from "shared/sim/match";
 import { Ship } from "shared/sim/ship";
 import { describe } from "shared/sim/snapshot";
-import { Match } from "../src/match.js";
-import { createNetSim } from "../src/netsim.js";
-import { Room } from "../src/rooms.js";
+import { Match } from "../src/match.ts";
+import { createNetSim } from "../src/netsim.ts";
+import { Room } from "../src/rooms.ts";
 import { closed, connect, createRoom, join, startApp, until } from "./helpers.js";
 
 function setup(options = {}) {

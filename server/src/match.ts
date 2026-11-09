@@ -1,42 +1,57 @@
+import { id16, seq, type Seq, type Tick, tick } from "shared/brand";
 import { getCodec } from "shared/codec/index";
+import type { Command, EventMessage } from "shared/protocol";
+import type { CommandInput } from "shared/sim/commands";
 import { applyCommand, createMatch, DT, TICK_RATE } from "shared/sim/match";
-import { id16, snapshotWorld } from "shared/sim/snapshot";
+import type { Ship } from "shared/sim/ship";
+import { snapshotWorld } from "shared/sim/snapshot";
+import type { World } from "shared/sim/world";
+import type { Room } from "./rooms.ts";
+import type { Player } from "./types.ts";
 
 export const INTERVAL_MS = 1000 / TICK_RATE;
 
-// Events of the world that clients need as messages: sounds, particles, text.
-const FORWARDED = {
-  fired: ({ ship }) => ({ ship: id16(ship.id) }),
-  hit: ({ target }) => ({ target: id16(target.id), x: target.pos.x, y: target.pos.y }),
-  exploded: ({ entity }) => ({
-    kind: entity.kind,
-    id: id16(entity.id),
-    x: entity.pos.x,
-    y: entity.pos.y,
-    color: entity.color ?? "#b0a090",
-  }),
-  pickup: ({ ship, effect }) => ({ ship: id16(ship.id), effect }),
-  respawned: ({ ship }) => ({ ship: id16(ship.id) }),
-};
+// one connected player's state inside the match
+interface Entry {
+  player: Player;
+  ship: Ship;
+  input: CommandInput;
+  queue: Command[];
+  ack: Seq; // last input seq that was applied (or thrown away) for this player
+  lastSeq: number; // newest input that was accepted into the queue
+  credit: number;
+}
+
+export interface MatchOptions {
+  maxInputQueue?: number;
+  now?: () => number;
+}
 
 // Authoritative simulation of one room: collects the players' inputs, runs
 // the shared world at 30 Hz and sends every player a snapshot.
 export class Match {
-  tick = 0;
-  players = new Map(); // player id -> { player, ship, input, queue, ack, ... }
-  #sim;
-  #timer = null;
+  tick: Tick = tick(0);
+  readonly players = new Map<string, Entry>();
+  readonly room: Room;
+  readonly world: World;
+  readonly maxInputQueue: number;
+  readonly now: () => number;
+  #sim: ReturnType<typeof createMatch>;
+  #timer: NodeJS.Timeout | null = null;
   #next = 0;
   #lastStart = 0;
   #index = 0;
-  #durations = []; // last second of tick durations, ms
-  #jitters = []; // |actual interval - 33.3|, ms
+  #durations: number[] = []; // last second of tick durations, ms
+  #jitters: number[] = []; // |actual interval - 33.3|, ms
   overruns = 0;
   starved = 0;
   catchUps = 0;
   discarded = 0;
 
-  constructor(room, { maxInputQueue = 3, now = () => performance.now() } = {}) {
+  constructor(
+    room: Room,
+    { maxInputQueue = 3, now = () => performance.now() }: MatchOptions = {},
+  ) {
     this.room = room;
     this.maxInputQueue = maxInputQueue;
     this.now = now;
@@ -46,21 +61,45 @@ export class Match {
     });
     this.world = this.#sim.world;
 
-    for (const [name, pick] of Object.entries(FORWARDED)) {
-      this.world.addEventListener(name, (event) => {
-        // chat-like traffic: a slow client may lose it
-        room.broadcast(
-          { type: "event", name, ...pick(event.detail) },
-          { critical: false },
-        );
-      });
-    }
+    // Events of the world that clients need as messages: sounds, particles,
+    // text. Chat-like traffic: a slow client may lose it.
+    const forward = (message: EventMessage) => room.broadcast(message, { critical: false });
+    this.world.on("fired", ({ ship }) =>
+      forward({ type: "event", name: "fired", ship: id16(ship.id) }),
+    );
+    this.world.on("hit", ({ target }) =>
+      forward({
+        type: "event",
+        name: "hit",
+        target: id16(target.id),
+        x: target.pos.x,
+        y: target.pos.y,
+      }),
+    );
+    this.world.on("exploded", ({ entity }) =>
+      forward({
+        type: "event",
+        name: "exploded",
+        kind: entity.kind,
+        id: id16(entity.id),
+        x: entity.pos.x,
+        y: entity.pos.y,
+        color: entity.kind === "ship" ? entity.color : "#b0a090",
+      }),
+    );
+    this.world.on("pickup", ({ ship, effect }) =>
+      forward({ type: "event", name: "pickup", ship: id16(ship.id), effect }),
+    );
+    this.world.on("respawned", ({ ship }) =>
+      forward({ type: "event", name: "respawned", ship: id16(ship.id) }),
+    );
+
     room.on("join", (player) => this.addPlayer(player));
     room.on("leave", (player) => this.removePlayer(player.id));
     room.once("empty", () => this.stop());
   }
 
-  addPlayer(player) {
+  addPlayer(player: Player): void {
     const { ship, input } = this.#sim.addShip(this.#index++, player.name);
     player.shipId = id16(ship.id);
     player.sprite = ship.sprite;
@@ -70,14 +109,14 @@ export class Match {
       ship,
       input,
       queue: [],
-      ack: 0,
+      ack: seq(0),
       lastSeq: 0,
       credit: 5,
     });
     this.start();
   }
 
-  removePlayer(id) {
+  removePlayer(id: string): void {
     const entry = this.players.get(id);
     if (!entry) return;
     entry.ship.kill();
@@ -86,8 +125,8 @@ export class Match {
   }
 
   // An input from the network. Returns false when it was not accepted.
-  // The caller has already checked its shape (checkCommand).
-  input(playerId, cmd) {
+  // The caller got it from a decoder or a schema, so its shape is checked.
+  input(playerId: string, cmd: Command): boolean {
     const entry = this.players.get(playerId);
     if (!entry || cmd.seq <= entry.lastSeq) return false; // duplicate or old
     entry.lastSeq = cmd.seq;
@@ -96,21 +135,21 @@ export class Match {
     return true;
   }
 
-  start() {
+  start(): void {
     if (this.#timer) return;
     this.#next = this.now() + INTERVAL_MS;
     this.#lastStart = 0;
     this.#timer = setTimeout(() => this.#loop(), INTERVAL_MS).unref();
   }
 
-  stop() {
-    clearTimeout(this.#timer);
+  stop(): void {
+    if (this.#timer) clearTimeout(this.#timer);
     this.#timer = null;
   }
 
   // Each tick is scheduled against an absolute target time. setInterval(33)
   // would add the delay of every tick to the next one and drift.
-  #loop() {
+  #loop(): void {
     const started = this.now();
     if (this.#lastStart)
       this.#push(this.#jitters, Math.abs(started - this.#lastStart - INTERVAL_MS));
@@ -132,27 +171,28 @@ export class Match {
     this.#timer = setTimeout(() => this.#loop(), wait).unref();
   }
 
-  #push(list, value) {
+  #push(list: number[], value: number): void {
     list.push(value);
     if (list.length > TICK_RATE * 2) list.shift();
   }
 
   // one step of the world; public so tests can drive it without timers
-  runTick() {
+  runTick(): void {
     for (const entry of this.players.values()) this.#consume(entry);
     this.world.step(DT);
-    this.tick++;
+    this.tick = tick(this.tick + 1);
     this.#broadcast();
   }
 
   // Exactly one input per tick moves a ship, the same step the client
   // predicted. Extra inputs (the queue grew after a network burst) are
   // applied as ship-only steps; no input at all freezes the ship for the tick.
-  #consume(entry) {
+  #consume(entry: Entry): void {
     const { ship, queue } = entry;
     ship.idle = false; // a tick without input may have left it set
     while (queue.length > this.maxInputQueue) {
-      this.#apply(entry, queue.shift());
+      const extra = queue.shift();
+      if (extra) this.#apply(entry, extra);
       if (ship.alive) ship.update(DT);
       this.catchUps++;
     }
@@ -165,7 +205,7 @@ export class Match {
 
   // speed hack guard: a client that sends more than ~33 inputs per second
   // runs out of credit, and its surplus inputs are acknowledged but ignored
-  #apply(entry, cmd) {
+  #apply(entry: Entry, cmd: Command): void {
     entry.ack = cmd.seq;
     if (entry.credit < 1) {
       this.discarded++;
@@ -176,24 +216,26 @@ export class Match {
     applyCommand(entry.ship, entry.input, cmd);
   }
 
-  #broadcast() {
+  #broadcast(): void {
     if (this.players.size === 0) return;
-    const base = snapshotWorld(this.world, this.tick);
-    const encoded = new Map(); // players with the same ack and codec share the bytes
+    const base = snapshotWorld(this.world, this.tick, seq(0)); // the world part is the same for all
+    const encoded = new Map<string, string | ArrayBuffer>(); // same ack and codec: same bytes
     for (const { player, ack } of this.players.values()) {
       const key = `${player.codec}:${ack}`;
-      if (!encoded.has(key)) {
-        encoded.set(key, getCodec(player.codec).encodeSnapshot({ ...base, ack }));
+      let frame = encoded.get(key);
+      if (frame === undefined) {
+        frame = getCodec(player.codec).encodeSnapshot({ ...base, ack });
+        encoded.set(key, frame);
       }
-      player.sendGame(encoded.get(key));
+      player.sendGame(frame);
     }
   }
 
   stats() {
     const sorted = [...this.#durations].sort((a, b) => a - b);
-    const avg = (list) =>
+    const avg = (list: number[]) =>
       list.length ? list.reduce((a, b) => a + b, 0) / list.length : 0;
-    const round = (n) => Math.round(n * 100) / 100;
+    const round = (n: number) => Math.round(n * 100) / 100;
     return {
       tick: this.tick,
       players: this.players.size,

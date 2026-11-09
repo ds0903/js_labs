@@ -1,19 +1,47 @@
 import { randomBytes } from "node:crypto";
 import { EventEmitter } from "node:events";
-import { startMatchLog } from "./log/matchlog.js";
-import { Match } from "./match.js";
-import { chat, roster } from "./protocol.js";
+import type { PlayerInfo, ServerMessage } from "shared/protocol";
+import { startMatchLog } from "./log/matchlog.ts";
+import { Match } from "./match.ts";
+import { chat, roster } from "./protocol.ts";
+import type { NewRoomRecord, Player, RoomRecord, SendOptions } from "./types.ts";
 
 export class LimitError extends Error {
-  name = "LimitError";
+  override name = "LimitError";
+}
+
+type ChatMessage = Extract<ServerMessage, { type: "chat" }>;
+
+// The events of a room and the arguments of each one (Node's EventEmitter
+// takes this map as a type parameter, so `on("join", player => ...)` knows
+// that `player` is a Player).
+export interface RoomEvents {
+  join: [Player];
+  leave: [Player];
+  chat: [ChatMessage];
+  event: [RoomRecord]; // every record that goes to the match log
+  empty: [Room];
+}
+
+export interface RoomInit {
+  id: string;
+  name: string;
+  arena?: string;
+  maxPlayers?: number;
 }
 
 // One room. Events: "join", "leave", "chat" (for whoever wants to react),
 // "event" (every record that goes to the match log) and "empty".
-export class Room extends EventEmitter {
-  players = new Map(); // id -> { id, name, send(message, { critical }) }
+export class Room extends EventEmitter<RoomEvents> {
+  readonly players = new Map<string, Player>();
+  readonly id: string;
+  readonly name: string;
+  readonly arena: string;
+  readonly maxPlayers: number;
+  // set by the RoomManager once the room exists (the match listens to the room)
+  match: Match | null = null;
 
-  constructor({ id, name, arena = "classic", maxPlayers = 8 }) {
+  constructor({ id, name, arena = "classic", maxPlayers = 8 }: RoomInit) {
     super();
     this.id = id;
     this.name = name;
@@ -21,16 +49,16 @@ export class Room extends EventEmitter {
     this.maxPlayers = maxPlayers;
   }
 
-  get size() {
+  get size(): number {
     return this.players.size;
   }
 
-  record(event) {
+  record(event: NewRoomRecord): void {
     this.emit("event", { t: Date.now(), ...event });
   }
 
   // ship, sprite and color are there once a Match has created the ship
-  listPlayers() {
+  listPlayers(): PlayerInfo[] {
     return [...this.players.values()].map(({ id, name, shipId, sprite, color }) => ({
       id,
       name,
@@ -38,11 +66,11 @@ export class Room extends EventEmitter {
     }));
   }
 
-  broadcast(message, options) {
+  broadcast(message: ServerMessage, options?: SendOptions): void {
     for (const player of this.players.values()) player.send(message, options);
   }
 
-  join(player) {
+  join(player: Player): boolean {
     if (this.players.size >= this.maxPlayers) return false;
     this.players.set(player.id, player);
     this.record({ type: "join", player: player.id, name: player.name });
@@ -51,7 +79,7 @@ export class Room extends EventEmitter {
     return true;
   }
 
-  leave(playerId) {
+  leave(playerId: string): void {
     const player = this.players.get(playerId);
     if (!player) return;
     this.players.delete(playerId);
@@ -64,7 +92,7 @@ export class Room extends EventEmitter {
     }
   }
 
-  say(playerId, text) {
+  say(playerId: string, text: string): void {
     const player = this.players.get(playerId);
     if (!player) return;
     const message = chat(player.name, text);
@@ -75,15 +103,37 @@ export class Room extends EventEmitter {
   }
 
   // used when the room is removed while nobody is inside (stale or shutdown)
-  close() {
+  close(): void {
     this.record({ type: "close" });
     this.emit("empty", this);
   }
 }
 
+export interface RoomManagerOptions {
+  maxRooms?: number;
+  maxPlayers?: number;
+  logDir?: string | null;
+  staleRoomMs?: number;
+  maxInputQueue?: number;
+  onError?: (error: Error) => void;
+}
+
+export interface RoomListing {
+  id: string;
+  name: string;
+  arena: string;
+  players: number;
+}
+
 export class RoomManager {
-  rooms = new Map();
-  #logs = new Set();
+  readonly rooms = new Map<string, Room>();
+  #logs = new Set<Promise<void>>();
+  readonly maxRooms: number;
+  readonly maxPlayers: number;
+  readonly logDir: string | null;
+  readonly staleRoomMs: number;
+  readonly maxInputQueue: number;
+  readonly onError: (error: Error) => void;
 
   constructor({
     maxRooms = 20,
@@ -92,7 +142,7 @@ export class RoomManager {
     staleRoomMs = 60_000,
     maxInputQueue = 3,
     onError,
-  } = {}) {
+  }: RoomManagerOptions = {}) {
     this.maxRooms = maxRooms;
     this.maxPlayers = maxPlayers;
     this.logDir = logDir;
@@ -101,7 +151,7 @@ export class RoomManager {
     this.onError = onError ?? (() => {});
   }
 
-  create({ name, arena = "classic" }) {
+  create({ name, arena = "classic" }: { name: string; arena?: string }): Room {
     if (this.rooms.size >= this.maxRooms) throw new LimitError("too many rooms");
 
     const slug =
@@ -131,11 +181,11 @@ export class RoomManager {
     return room;
   }
 
-  get(id) {
+  get(id: string): Room | undefined {
     return this.rooms.get(id);
   }
 
-  list() {
+  list(): RoomListing[] {
     return [...this.rooms.values()].map((r) => ({
       id: r.id,
       name: r.name,
@@ -145,15 +195,17 @@ export class RoomManager {
   }
 
   stats() {
-    return [...this.rooms.values()].map((r) => ({ id: r.id, ...r.match.stats() }));
+    return [...this.rooms.values()].flatMap((r) =>
+      r.match ? [{ id: r.id, ...r.match.stats() }] : [],
+    );
   }
 
-  closeAll() {
+  closeAll(): void {
     for (const room of [...this.rooms.values()]) room.close();
   }
 
   // resolves when all match log files are written and closed
-  async flush() {
+  async flush(): Promise<void> {
     await Promise.allSettled([...this.#logs]);
   }
 }

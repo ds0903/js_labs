@@ -1,9 +1,10 @@
 import { createReadStream } from "node:fs";
 import { stat } from "node:fs/promises";
+import type { IncomingMessage, ServerResponse } from "node:http";
 import path from "node:path";
 import { pipeline } from "node:stream";
 
-const MIME = {
+const MIME: Readonly<Record<string, string>> = {
   ".html": "text/html; charset=utf-8",
   ".js": "text/javascript; charset=utf-8",
   ".mjs": "text/javascript; charset=utf-8",
@@ -18,14 +19,14 @@ const MIME = {
   ".map": "application/json",
 };
 
-export const mimeFor = (file) =>
+export const mimeFor = (file: string): string =>
   MIME[path.extname(file).toLowerCase()] ?? "application/octet-stream";
 
 // Maps a URL path to a file inside `root`, or returns null if the path is
 // not allowed: bad encoding, NUL byte, backslash, any ".." segment (also
 // when it was percent-encoded), or a result outside of root.
-export function resolveStaticPath(root, urlPath) {
-  let decoded;
+export function resolveStaticPath(root: string, urlPath: string): string | null {
+  let decoded: string;
   try {
     decoded = decodeURIComponent(urlPath);
   } catch {
@@ -41,16 +42,21 @@ export function resolveStaticPath(root, urlPath) {
 }
 
 // Streams the file to the response, it is never read into memory whole.
-export async function serveStatic(root, req, res) {
-  // raw path: new URL() would quietly collapse ".." before the guard sees it
-  const pathname = req.url.split(/[?#]/)[0];
+export async function serveStatic(
+  root: string,
+  req: IncomingMessage,
+  res: ServerResponse,
+): Promise<void> {
+  // raw path: new URL() would quietly collapse ".." before the guard sees it.
+  // `req.url` is optional in the types (it is not set on a client request).
+  const pathname = (req.url ?? "/").split(/[?#]/)[0] ?? "/";
   const file = resolveStaticPath(root, pathname);
   if (!file) {
     res.writeHead(400, { "Content-Type": "text/plain" }).end("bad path");
     return;
   }
 
-  let info;
+  let info: Awaited<ReturnType<typeof stat>> | null;
   try {
     info = await stat(file);
   } catch {

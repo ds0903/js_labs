@@ -1,21 +1,31 @@
 import { createReadStream } from "node:fs";
 import { readdir, stat } from "node:fs/promises";
+import type { IncomingMessage, ServerResponse } from "node:http";
 import path from "node:path";
 import { pipeline } from "node:stream";
-import { LimitError } from "./rooms.js";
-import { serveStatic } from "./static.js";
+import { ARENAS, isArenaName } from "shared/sim/game";
+import type { ServerConfig } from "./config.ts";
+import { LimitError, type RoomManager } from "./rooms.ts";
+import { serveStatic } from "./static.ts";
 
-const ARENAS = ["classic", "rocks", "duel"];
+const ARENA_NAMES = Object.keys(ARENAS);
 
 export class HttpError extends Error {
-  constructor(status, message) {
+  readonly status: number;
+
+  constructor(status: number, message: string) {
     super(message);
     this.name = "HttpError";
     this.status = status;
   }
 }
 
-export function sendJson(res, status, body, headers = {}) {
+export function sendJson(
+  res: ServerResponse,
+  status: number,
+  body: unknown,
+  headers: Record<string, string> = {},
+): void {
   const data = JSON.stringify(body);
   res.writeHead(status, {
     "Content-Type": "application/json; charset=utf-8",
@@ -26,12 +36,12 @@ export function sendJson(res, status, body, headers = {}) {
 }
 
 // Reads the request body, but gives up as soon as it is bigger than `limit`.
-function readBody(req, limit) {
+function readBody(req: IncomingMessage, limit: number): Promise<string> {
   return new Promise((resolve, reject) => {
-    const chunks = [];
+    const chunks: Buffer[] = [];
     let size = 0;
     let tooBig = false;
-    req.on("data", (chunk) => {
+    req.on("data", (chunk: Buffer) => {
       if (tooBig) return;
       size += chunk.length;
       if (size > limit) {
@@ -46,8 +56,8 @@ function readBody(req, limit) {
   });
 }
 
-function parseNewRoom(text) {
-  let body;
+function parseNewRoom(text: string): { name: string; arena: string } {
+  let body: unknown;
   try {
     body = JSON.parse(text);
   } catch {
@@ -56,20 +66,30 @@ function parseNewRoom(text) {
   if (body === null || typeof body !== "object" || Array.isArray(body)) {
     throw new HttpError(400, "body must be an object");
   }
-  const { name, arena = "classic" } = body;
+  // the body is `unknown` until here; `in` narrows it field by field
+  const name = "name" in body ? body.name : undefined;
+  const arena = "arena" in body && body.arena !== undefined ? body.arena : "classic";
   if (typeof name !== "string" || name.trim().length < 1 || name.length > 24) {
     throw new HttpError(400, "name must be 1-24 characters");
   }
-  if (!ARENAS.includes(arena))
-    throw new HttpError(400, `arena must be one of ${ARENAS.join(", ")}`);
+  if (typeof arena !== "string" || !isArenaName(arena)) {
+    throw new HttpError(400, `arena must be one of ${ARENA_NAMES.join(", ")}`);
+  }
   return { name: name.trim(), arena };
 }
 
 const REPLAY_NAME = /^[A-Za-z0-9_.-]+\.ndjson$/;
 
-export function createHandler({ config, rooms, stats, connections }) {
-  return async function handle(req, res) {
-    const { pathname } = new URL(req.url, "http://localhost");
+export interface HandlerDeps {
+  config: ServerConfig;
+  rooms: RoomManager;
+  stats: { dropped: number };
+  connections: () => number;
+}
+
+export function createHandler({ config, rooms, stats, connections }: HandlerDeps) {
+  return async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> {
+    const { pathname } = new URL(req.url ?? "/", "http://localhost");
     const method = req.method;
 
     if (pathname === "/health" && method === "GET") {
@@ -119,7 +139,7 @@ export function createHandler({ config, rooms, stats, connections }) {
       return sendJson(res, 200, files);
     }
     if (pathname.startsWith("/api/replays/") && method === "GET") {
-      let name;
+      let name: string;
       try {
         name = decodeURIComponent(pathname.slice("/api/replays/".length));
       } catch {
@@ -127,7 +147,7 @@ export function createHandler({ config, rooms, stats, connections }) {
       }
       if (!REPLAY_NAME.test(name)) throw new HttpError(400, "bad replay name");
       const file = path.join(config.logDir, name);
-      let info;
+      let info: Awaited<ReturnType<typeof stat>>;
       try {
         info = await stat(file);
       } catch {

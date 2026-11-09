@@ -5,12 +5,12 @@ import path from "node:path";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { test } from "node:test";
-import { ConfigError, loadConfig } from "../src/config.js";
-import { toNdjson } from "../src/log/matchlog.js";
-import { replay } from "../src/log/replay.js";
-import { Room, RoomManager } from "../src/rooms.js";
-import { mimeFor, resolveStaticPath } from "../src/static.js";
-import { createBucket, createSender } from "../src/ws.js";
+import { ConfigError, loadConfig } from "../src/config.ts";
+import { toNdjson } from "../src/log/matchlog.ts";
+import { replay } from "../src/log/replay.ts";
+import { Room, RoomManager } from "../src/rooms.ts";
+import { mimeFor, resolveStaticPath } from "../src/static.ts";
+import { createBucket, createSender } from "../src/ws.ts";
 
 const tmp = () => mkdtempSync(path.join(os.tmpdir(), "arena-u-"));
 

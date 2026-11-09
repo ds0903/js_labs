@@ -132,7 +132,7 @@ console.log(`making ${SIZE_MB} MB log...`);
 await makeLog(file, SIZE_MB);
 console.log(`file: ${Math.round(statSync(file).size / MB)} MB`);
 
-const real = spawn(process.execPath, ["server/src/index.js"], {
+const real = spawn(process.execPath, ["server/src/index.ts"], {
   cwd: root,
   env: { ...process.env, PORT: "3100", LOG_DIR: dir, HOST: "127.0.0.1" },
   stdio: "ignore",

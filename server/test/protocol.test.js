@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { CLOSE, validate } from "../src/protocol.js";
+import { CLOSE, parseClientText as validate } from "shared/protocol";
 
 const join = { type: "join", v: 1, room: "abc-123", name: "Pilot" };
 

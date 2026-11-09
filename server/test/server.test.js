@@ -3,8 +3,8 @@ import { mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import http from "node:http";
 import path from "node:path";
 import { test } from "node:test";
-import { createShutdown } from "../src/index.js";
-import { replay } from "../src/log/replay.js";
+import { createShutdown } from "../src/index.ts";
+import { replay } from "../src/log/replay.ts";
 import { closed, connect, createRoom, join, silent, startApp, until } from "./helpers.js";
 
 // fetch() normalizes ".." away, so traversal attempts go out as raw requests

@@ -15,7 +15,7 @@ const dir = mkdtempSync(path.join(os.tmpdir(), "arena-block-"));
 mkdirSync(path.join(dir, "logs"), { recursive: true });
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-const server = spawn(process.execPath, ["server/src/index.js"], {
+const server = spawn(process.execPath, ["server/src/index.ts"], {
   cwd: root,
   env: {
     ...process.env,

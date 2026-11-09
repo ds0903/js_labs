@@ -5,7 +5,7 @@ import { createWriteStream } from "node:fs";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { pathToFileURL } from "node:url";
-import { toNdjson } from "../server/src/log/matchlog.js";
+import { toNdjson } from "../server/src/log/matchlog.ts";
 
 function* events(bytes) {
   const names = ["Ann", "Bob", "Cat", "Dan"];
