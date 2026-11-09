@@ -120,7 +120,10 @@ export function createShutdown(
   };
 }
 
-export function installShutdown(app: Pick<App, "close">, options?: ShutdownOptions): void {
+export function installShutdown(
+  app: Pick<App, "close">,
+  options?: ShutdownOptions,
+): void {
   const shutdown = createShutdown(app, options);
   for (const signal of ["SIGINT", "SIGTERM"])
     process.once(signal, () => shutdown(signal));

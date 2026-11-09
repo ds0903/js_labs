@@ -205,7 +205,9 @@ test("decoders check ranges, not only lengths", () => {
   // JSON: the schema is the validator, a missing or foreign field throws
   assert.throws(() => json.decodeInput('{"type":"input","seq":1}'));
   assert.throws(() =>
-    json.decodeInput('{"type":"input","seq":1,"tick":0,"thrust":false,"turn":5,"fire":false}'),
+    json.decodeInput(
+      '{"type":"input","seq":1,"tick":0,"thrust":false,"turn":5,"fire":false}',
+    ),
   );
 });
 

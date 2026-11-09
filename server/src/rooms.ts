@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { EventEmitter } from "node:events";
-import type { PlayerInfo, ServerMessage } from "shared/protocol";
+import type { PlayerInfo, RoomListing, ServerMessage } from "shared/protocol";
 import { startMatchLog } from "./log/matchlog.ts";
 import { Match } from "./match.ts";
 import { chat, roster } from "./protocol.ts";
@@ -116,13 +116,6 @@ export interface RoomManagerOptions {
   staleRoomMs?: number;
   maxInputQueue?: number;
   onError?: (error: Error) => void;
-}
-
-export interface RoomListing {
-  id: string;
-  name: string;
-  arena: string;
-  players: number;
 }
 
 export class RoomManager {

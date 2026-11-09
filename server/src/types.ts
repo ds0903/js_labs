@@ -33,7 +33,12 @@ export interface Player {
 
 // what is written to the match log
 export type RoomRecord = { readonly t: number } & (
-  | { readonly type: "open"; readonly room: string; readonly name: string; readonly arena: string }
+  | {
+      readonly type: "open";
+      readonly room: string;
+      readonly name: string;
+      readonly arena: string;
+    }
   | { readonly type: "join"; readonly player: string; readonly name: string }
   | { readonly type: "leave"; readonly player: string }
   | { readonly type: "chat"; readonly player: string; readonly text: string }

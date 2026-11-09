@@ -1,5 +1,11 @@
 import { entityId, seq, tick } from "../brand.ts";
-import { type Command, MSG, PROTOCOL_VERSION, type Snapshot, type SnapshotEntity } from "../protocol.ts";
+import {
+  type Command,
+  MSG,
+  PROTOCOL_VERSION,
+  type Snapshot,
+  type SnapshotEntity,
+} from "../protocol.ts";
 import { PICKUP_EFFECTS } from "../sim/effects.ts";
 import { KIND, KIND_NAMES } from "../sim/snapshot.ts";
 
@@ -67,7 +73,8 @@ const viewOf = (data: BinaryFrame): DataView =>
     : new DataView(data);
 
 function checkHeader(v: DataView, type: number): void {
-  if (v.byteLength < 2 || v.getUint8(0) !== type) throw new CodecError("wrong frame type");
+  if (v.byteLength < 2 || v.getUint8(0) !== type)
+    throw new CodecError("wrong frame type");
   if (v.getUint8(1) !== PROTOCOL_VERSION) throw new CodecError("unsupported version");
 }
 

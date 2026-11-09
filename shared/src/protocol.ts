@@ -9,7 +9,14 @@
 //   server -> client: welcome, roster, chat, pong, event (and snapshot, json codec)
 // Game messages (input up, snapshot down) go through the codec of the join.
 import { z } from "zod";
-import { type EntityId, isEntityId, isSeq, isTick, type Seq, type Tick } from "./brand.ts";
+import {
+  type EntityId,
+  isEntityId,
+  isSeq,
+  isTick,
+  type Seq,
+  type Tick,
+} from "./brand.ts";
 import { PICKUP_EFFECTS } from "./sim/effects.ts";
 
 // Version of the whole wire protocol (JSON control messages and both codecs).
@@ -152,7 +159,11 @@ const PlayerInfoSchema = z.strictObject({
 export type PlayerInfo = z.infer<typeof PlayerInfoSchema>;
 
 const EventSchema = z.discriminatedUnion("name", [
-  z.strictObject({ type: z.literal("event"), name: z.literal("fired"), ship: EntityIdSchema }),
+  z.strictObject({
+    type: z.literal("event"),
+    name: z.literal("fired"),
+    ship: EntityIdSchema,
+  }),
   z.strictObject({
     type: z.literal("event"),
     name: z.literal("hit"),
@@ -175,7 +186,11 @@ const EventSchema = z.discriminatedUnion("name", [
     ship: EntityIdSchema,
     effect: z.enum(PICKUP_EFFECTS),
   }),
-  z.strictObject({ type: z.literal("event"), name: z.literal("respawned"), ship: EntityIdSchema }),
+  z.strictObject({
+    type: z.literal("event"),
+    name: z.literal("respawned"),
+    ship: EntityIdSchema,
+  }),
 ]);
 
 // a plain union: the five events share type "event" and differ by `name`, which
@@ -207,6 +222,17 @@ export type EventMessage = Extract<ServerMessage, { type: "event" }>;
 // JSON game frames (the "json" codec)
 export const JsonInputSchema = CommandSchema.extend({ type: z.literal("input") });
 export const JsonSnapshotSchema = SnapshotSchema.extend({ type: z.literal("snapshot") });
+
+// ---- the room list (HTTP, GET /api/rooms)
+
+export const RoomListingSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  arena: z.string(),
+  players: z.number().int().min(0),
+});
+export type RoomListing = z.infer<typeof RoomListingSchema>;
+export const RoomListSchema = z.array(RoomListingSchema);
 
 // ---- parsing: a bad message is a normal result, never an exception
 

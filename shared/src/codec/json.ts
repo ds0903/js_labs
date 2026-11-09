@@ -1,4 +1,9 @@
-import { type Command, JsonInputSchema, JsonSnapshotSchema, type Snapshot } from "../protocol.ts";
+import {
+  type Command,
+  JsonInputSchema,
+  JsonSnapshotSchema,
+  type Snapshot,
+} from "../protocol.ts";
 
 // The text codec, kept for comparison with the binary one (?codec=json).
 // A decoder is a validator here too: the zod schema throws on anything that

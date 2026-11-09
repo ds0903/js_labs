@@ -1,4 +1,4 @@
-import { id16, seq, type Seq, type Tick, tick } from "shared/brand";
+import { id16, type Seq, seq, type Tick, tick } from "shared/brand";
 import { getCodec } from "shared/codec/index";
 import type { Command, EventMessage } from "shared/protocol";
 import type { CommandInput } from "shared/sim/commands";
@@ -63,7 +63,8 @@ export class Match {
 
     // Events of the world that clients need as messages: sounds, particles,
     // text. Chat-like traffic: a slow client may lose it.
-    const forward = (message: EventMessage) => room.broadcast(message, { critical: false });
+    const forward = (message: EventMessage) =>
+      room.broadcast(message, { critical: false });
     this.world.on("fired", ({ ship }) =>
       forward({ type: "event", name: "fired", ship: id16(ship.id) }),
     );

@@ -1,7 +1,7 @@
 import { randomBytes } from "node:crypto";
 import type { Server } from "node:http";
 import { decodeInput } from "shared/codec/binary";
-import { type CodecName, type Command, CLOSE, parseClientText } from "shared/protocol";
+import { CLOSE, type CodecName, type Command, parseClientText } from "shared/protocol";
 import { TICK_RATE } from "shared/sim/match";
 import { type RawData, type WebSocket, WebSocketServer } from "ws";
 import type { ServerConfig } from "./config.ts";
@@ -32,7 +32,10 @@ export function createBucket(ratePerSec: number, now: () => number = Date.now): 
 }
 
 // the part of a WebSocket the sender touches (a test can pass a fake)
-export type SocketLike = Pick<WebSocket, "readyState" | "OPEN" | "bufferedAmount" | "send" | "close">;
+export type SocketLike = Pick<
+  WebSocket,
+  "readyState" | "OPEN" | "bufferedAmount" | "send" | "close"
+>;
 
 // Sending with a slow-client policy. If the socket has more than
 // `bufferedLimit` bytes waiting, messages that can be lost (chat, snapshots)
@@ -71,7 +74,8 @@ export function createSender(
 
 function netsimFromUrl(url = "/"): NetSimSettings {
   const params = new URL(url, "http://localhost").searchParams;
-  const num = (name: string) => Math.min(2000, Math.max(0, Number(params.get(name)) || 0));
+  const num = (name: string) =>
+    Math.min(2000, Math.max(0, Number(params.get(name)) || 0));
   return { latency: num("lat"), jitter: num("jitter"), drop: Math.min(50, num("drop")) };
 }
 
@@ -150,12 +154,12 @@ export function attachWebSocket(server: Server, { rooms, config, stats, log }: W
       state.missedPongs = 0;
     });
 
-    function onInput(room: Room, cmd: Command): void {
+    function onInput(room: Room, cmd: Command) {
       if (!state.inputBucket.take()) return close(CLOSE.RATE_LIMIT, "too many inputs");
       room.match?.input(state.id, cmd);
     }
 
-    function handle(data: Buffer, isBinary: boolean): void {
+    function handle(data: Buffer, isBinary: boolean) {
       if (ws.readyState !== ws.OPEN) return;
 
       if (isBinary) {
@@ -165,7 +169,10 @@ export function attachWebSocket(server: Server, { rooms, config, stats, log }: W
         try {
           cmd = decodeInput(data); // the decoder is the validator
         } catch (error) {
-          return close(CLOSE.BAD_MESSAGE, error instanceof Error ? error.message : "bad input");
+          return close(
+            CLOSE.BAD_MESSAGE,
+            error instanceof Error ? error.message : "bad input",
+          );
         }
         return onInput(room, cmd);
       }
@@ -200,7 +207,8 @@ export function attachWebSocket(server: Server, { rooms, config, stats, log }: W
           state.room = room;
           clearTimeout(joinTimer);
           // the match gave the player a ship while it was joining
-          if (player.shipId === undefined) return close(CLOSE.ROOM_NOT_FOUND, "room has no match");
+          if (player.shipId === undefined)
+            return close(CLOSE.ROOM_NOT_FOUND, "room has no match");
           player.send(
             welcome(
               state.id,
@@ -217,8 +225,13 @@ export function attachWebSocket(server: Server, { rooms, config, stats, log }: W
           return out({ type: "pong", t: msg.t, tick: state.room?.match?.tick ?? 0 });
         case "netsim":
           if (!state.room) return close(CLOSE.BAD_MESSAGE, "join first");
-          if (!config.enableNetsim) return close(CLOSE.UNKNOWN_TYPE, "netsim is disabled");
-          return state.net.set({ latency: msg.latency, jitter: msg.jitter, drop: msg.drop });
+          if (!config.enableNetsim)
+            return close(CLOSE.UNKNOWN_TYPE, "netsim is disabled");
+          return state.net.set({
+            latency: msg.latency,
+            jitter: msg.jitter,
+            drop: msg.drop,
+          });
         case "chat":
           if (!state.room) return close(CLOSE.BAD_MESSAGE, "join first");
           return state.room.say(state.id, msg.text);
@@ -230,7 +243,8 @@ export function attachWebSocket(server: Server, { rooms, config, stats, log }: W
     // only inputs can be "lost" by the injector, chat and join cannot
     ws.on("message", (raw, isBinary) => {
       const data = toBuffer(raw);
-      const droppable = isBinary || data.toString("utf8", 0, 16).startsWith('{"type":"input"');
+      const droppable =
+        isBinary || data.toString("utf8", 0, 16).startsWith('{"type":"input"');
       state.net.run("in", () => handle(data, isBinary), { droppable });
     });
 

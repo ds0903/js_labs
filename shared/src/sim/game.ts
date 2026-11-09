@@ -33,7 +33,8 @@ export const ARENAS = {
 
 export type ArenaName = keyof typeof ARENAS;
 
-export const isArenaName = (name: string): name is ArenaName => Object.hasOwn(ARENAS, name);
+export const isArenaName = (name: string): name is ArenaName =>
+  Object.hasOwn(ARENAS, name);
 
 // asteroids, and a pickup spawner that keeps up to 3 pickups in the arena
 export function populate(
