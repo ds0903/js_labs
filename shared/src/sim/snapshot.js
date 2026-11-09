@@ -3,13 +3,15 @@
 //
 // Ids in snapshots are 16 bits (id & 0xffff): that is what the binary format
 // has room for, and the JSON format follows it so both behave the same.
+import { normalizeAngle } from "./dmath.js";
+
 export const KIND = { ship: 1, bullet: 2, asteroid: 3, pickup: 4 };
 export const KIND_NAMES = [null, "ship", "bullet", "asteroid", "pickup"];
 
 export const id16 = (id) => id & 0xffff;
 
 // angles grow without limit inside the simulation, a snapshot keeps (-pi, pi]
-export const normalizeAngle = (angle) => Math.atan2(Math.sin(angle), Math.cos(angle));
+export { normalizeAngle };
 
 export function describe(e) {
   const base = {

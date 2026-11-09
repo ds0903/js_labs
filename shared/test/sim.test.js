@@ -8,7 +8,7 @@ import { describe, id16, normalizeAngle, snapshotWorld } from "shared/sim/snapsh
 
 // Changing the simulation changes this number. That is the point: the client
 // and the server must agree, so a change has to be made on purpose.
-const GOLDEN_1000_STEPS = 3031409113;
+const GOLDEN_1000_STEPS = 2394282127;
 
 test("the shared simulation imports in Node and touches no DOM or Node API", () => {
   assert.equal(typeof document, "undefined");

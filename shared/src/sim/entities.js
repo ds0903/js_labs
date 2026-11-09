@@ -1,10 +1,11 @@
 import { withHoming } from "./behaviors.js";
+import { atan2 } from "./dmath.js";
 import { Entity } from "./entity.js";
 import { Vector2 } from "./vector.js";
 
 export class Bullet extends Entity {
   constructor({ pos, vel, owner, ttl = 1.2, damage = 10 }) {
-    super({ kind: "bullet", pos, vel, radius: 3, angle: Math.atan2(vel.y, vel.x) });
+    super({ kind: "bullet", pos, vel, radius: 3, angle: atan2(vel.y, vel.x) });
     this.owner = owner;
     this.ttl = ttl;
     this.damage = damage;

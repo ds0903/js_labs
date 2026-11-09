@@ -1,3 +1,4 @@
+import { atan2, normalizeAngle } from "./dmath.js";
 import { Vector2 } from "./vector.js";
 
 // Homing is a behavior, not a class. It can be attached to a bullet, to an
@@ -22,9 +23,8 @@ export function homing({ targetKinds, turnRate, range = 450, ignore = null }) {
     if (!target) return;
 
     const want = target.pos.sub(self.pos);
-    const current = Math.atan2(self.vel.y, self.vel.x);
-    let diff = Math.atan2(want.y, want.x) - current;
-    diff = Math.atan2(Math.sin(diff), Math.cos(diff)); // to [-PI, PI]
+    const current = atan2(self.vel.y, self.vel.x);
+    const diff = normalizeAngle(atan2(want.y, want.x) - current); // to [-PI, PI]
     const turn = Math.max(-turnRate * dt, Math.min(turnRate * dt, diff));
 
     self.vel = Vector2.fromAngle(current + turn, speed);

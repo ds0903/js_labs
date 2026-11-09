@@ -1,3 +1,5 @@
+import { cos, sin } from "./dmath.js";
+
 // Immutable 2D vector. Every method returns a new vector, the arguments are
 // never touched, and Object.freeze makes an accidental `v.x += 1` throw.
 export class Vector2 {
@@ -8,7 +10,7 @@ export class Vector2 {
   }
 
   static fromAngle(angle, length = 1) {
-    return new Vector2(Math.cos(angle) * length, Math.sin(angle) * length);
+    return new Vector2(cos(angle) * length, sin(angle) * length);
   }
 
   add(v) {
@@ -37,8 +39,8 @@ export class Vector2 {
   }
 
   rotate(angle) {
-    const cos = Math.cos(angle);
-    const sin = Math.sin(angle);
-    return new Vector2(this.x * cos - this.y * sin, this.x * sin + this.y * cos);
+    const c = cos(angle);
+    const s = sin(angle);
+    return new Vector2(this.x * c - this.y * s, this.x * s + this.y * c);
   }
 }
